@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Cluster Monitoring - Live Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .demo-container {
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 1.5em;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        
+        .status-item {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.85em;
+            color: #888;
+        }
+        
+        .status-value {
+            color: #fff;
+            margin-left: 8px;
+            font-weight: 500;
+        }
+        
+        .control-panel {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+            border: 1px solid #222;
+            border-radius: 12px;
+        }
+        
+        .start-button {
+            padding: 18px 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 0.5px;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .start-button:hover {
+            background: #e0e0e0;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255,255,255,0.3);
+        }
+        
+        .start-button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .stop-button {
+            padding: 18px 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            background: transparent;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 0.5px;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .stop-button:hover {
+            background: #ffffff;
+            color: #000000;
+        }
+        
+        .grid-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .waveform-section {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 25px;
+        }
+        
+        .section-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+        }
+        
+         .terminal-container {
+             background: #000000;
+             border: 1px solid #333;
+             border-radius: 6px;
+             height: 650px;
+             overflow-y: auto;
+             padding: 15px;
+             font-family: 'Roboto Mono', monospace;
+             font-size: 0.8em;
+             line-height: 1.6;
+         }
+         
+         .terminal-content {
+             color: #00ff00;
+         }
+         
+         .log-line {
+             margin-bottom: 2px;
+             white-space: pre-wrap;
+             word-break: break-all;
+         }
+         
+         .log-timestamp {
+             color: #666;
+             margin-right: 10px;
+         }
+         
+         .log-level-INFO {
+             color: #00aaff;
+         }
+         
+         .log-level-WARN {
+             color: #ffaa00;
+         }
+         
+         .log-level-ERROR {
+             color: #ff4444;
+         }
+         
+         .log-level-DEBUG {
+             color: #888;
+         }
+         
+         .log-level-METRIC {
+             color: #00ff88;
+         }
+         
+         .log-node {
+             color: #c084fc;
+             font-weight: 500;
+         }
+         
+         .log-gpu {
+             color: #60a5fa;
+         }
+         
+         .log-value {
+             color: #ffffff;
+             font-weight: 600;
+         }
+        
+        .alerts-section {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 25px;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+        
+        .alert-item {
+            background: #1a1a1a;
+            border-left: 4px solid #fff;
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        .alert-item.critical {
+            border-left-color: #ff4444;
+            background: #1a0a0a;
+        }
+        
+        .alert-item.warning {
+            border-left-color: #ffaa00;
+            background: #1a1a0a;
+        }
+        
+        .alert-item.info {
+            border-left-color: #00aaff;
+            background: #0a1a1a;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .alert-time {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.75em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .alert-title {
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 5px;
+        }
+        
+        .alert-details {
+            font-size: 0.85em;
+            color: #aaa;
+            line-height: 1.5;
+        }
+        
+        .gpu-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .gpu-box {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .gpu-box.active {
+            border-color: #fff;
+            background: #222;
+        }
+        
+        .gpu-box.warning {
+            border-color: #ffaa00;
+            background: #221a0a;
+            animation: pulse 2s infinite;
+        }
+        
+        .gpu-box.critical {
+            border-color: #ff4444;
+            background: #220a0a;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .gpu-label {
+            font-size: 0.75em;
+            color: #666;
+            margin-bottom: 8px;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .gpu-value {
+            font-size: 1.5em;
+            font-weight: 600;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .gpu-metric {
+            font-size: 0.7em;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .metric-label {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .metric-change {
+            font-size: 0.8em;
+            margin-top: 5px;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .metric-change.positive {
+            color: #00ff88;
+        }
+        
+        .metric-change.negative {
+            color: #ff4444;
+        }
+        
+        .scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .scrollbar::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        
+        .scrollbar::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        
+        .scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .node-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .node-tab {
+            padding: 10px 20px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-family: 'Roboto Mono', monospace;
+            transition: all 0.3s;
+        }
+        
+        .node-tab:hover {
+            background: #222;
+            border-color: #555;
+        }
+        
+        .node-tab.active {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+        }
+        
+        .simulation-status {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        .loading-animation {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #333;
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="header">
+            <div class="logo">GPU CLUSTER MONITOR</div>
+            <div class="status-bar">
+                <div class="status-item">
+                    NODES <span class="status-value" id="node-count">0</span>
+                </div>
+                <div class="status-item">
+                    GPUS <span class="status-value" id="gpu-count">0</span>
+                </div>
+                <div class="status-item">
+                    ALERTS <span class="status-value" id="alert-count">0</span>
+                </div>
+                <div class="status-item">
+                    UPTIME <span class="status-value" id="uptime">00:00:00</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <button class="start-button" id="start-btn" onclick="startSimulation()">
+                START SIMULATION
+            </button>
+            <button class="stop-button" id="stop-btn" onclick="stopSimulation()" style="display: none;">
+                STOP
+            </button>
+        </div>
+        
+        <div id="simulation-content" style="display: none;">
+            <div class="node-selector" id="node-selector"></div>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Cluster Util</div>
+                    <div class="metric-value" id="cluster-util">0%</div>
+                    <div class="metric-change" id="util-change">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Temp</div>
+                    <div class="metric-value" id="avg-temp">0°C</div>
+                    <div class="metric-change" id="temp-change">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Power</div>
+                    <div class="metric-value" id="total-power">0W</div>
+                    <div class="metric-change" id="power-change">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Health Score</div>
+                    <div class="metric-value" id="health-score">100</div>
+                    <div class="metric-change" id="health-change">--</div>
+                </div>
+            </div>
+            
+            <div class="gpu-grid" id="gpu-grid"></div>
+            
+             <div class="grid-container">
+                 <div class="waveform-section">
+                     <div class="section-title">System Logs</div>
+                     <div class="terminal-container scrollbar" id="terminal">
+                         <div class="terminal-content" id="terminal-content"></div>
+                     </div>
+                 </div>
+                 
+                 <div class="alerts-section scrollbar">
+                     <div class="section-title">Live Alerts</div>
+                     <div id="alerts-container"></div>
+                 </div>
+             </div>
+        </div>
+        
+        <div id="initial-message" class="simulation-status">
+            Press START SIMULATION to begin autonomous demo
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        
+         let simulationRunning = false;
+         let simulationInterval = null;
+         let dataIndex = 0;
+         let alertCount = 0;
+         let startTime = null;
+         let nodes = [];
+         let currentNode = null;
+         let nodeData = {};
+         let logBuffer = [];
+         
+         // Simulation parameters
+         const UPDATE_INTERVAL = 100; // ms
+         const MAX_LOG_LINES = 500;
+        
+         async function loadData() {
+             const response = await fetch(`${API_URL}/nodes`);
+             const data = await response.json();
+             nodes = data.nodes;
+             
+             // Load data for all nodes
+             for (const node of nodes) {
+                 const metricsPromises = [];
+                 for (let gpu = 0; gpu < 8; gpu++) {
+                     metricsPromises.push(
+                         fetch(`${API_URL}/gpu-metrics/${node}/${gpu}`).then(r => r.json())
+                     );
+                 }
+                 nodeData[node] = await Promise.all(metricsPromises);
+             }
+             
+             currentNode = nodes[0];
+             
+             // Add startup logs to terminal
+             setTimeout(() => {
+                 addLog('INFO', 'SYSTEM', `Connected to ${nodes.length} compute nodes`);
+                 nodes.forEach(node => {
+                     addLog('INFO', node, 'Node online - 8 GPUs detected');
+                 });
+                 addLog('INFO', 'SYSTEM', 'All systems operational');
+                 addLog('DEBUG', 'SYSTEM', 'Telemetry streaming initialized');
+             }, 100);
+             
+             return true;
+         }
+        
+        async function startSimulation() {
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('initial-message').innerHTML = 
+                'Loading data<span class="loading-animation"></span>';
+            
+            await loadData();
+            
+            document.getElementById('initial-message').style.display = 'none';
+            document.getElementById('simulation-content').style.display = 'block';
+            document.getElementById('stop-btn').style.display = 'inline-block';
+            
+             initializeUI();
+             
+             simulationRunning = true;
+             startTime = Date.now();
+             dataIndex = 0;
+             
+             // Add welcome banner
+             const banner = '═'.repeat(60);
+             addLog('INFO', 'SYSTEM', banner);
+             addLog('INFO', 'SYSTEM', '  GPU CLUSTER MONITORING SYSTEM v2.1.0');
+             addLog('INFO', 'SYSTEM', banner);
+             addLog('INFO', 'SYSTEM', 'Simulation started');
+             addLog('INFO', 'SYSTEM', `Monitoring ${nodes.length} nodes with ${nodes.length * 8} GPUs`);
+             
+             simulationInterval = setInterval(updateSimulation, UPDATE_INTERVAL);
+        }
+        
+         function stopSimulation() {
+             simulationRunning = false;
+             if (simulationInterval) {
+                 clearInterval(simulationInterval);
+             }
+             
+             addLog('INFO', 'SYSTEM', 'Simulation stopped by user');
+             
+             document.getElementById('start-btn').disabled = false;
+             document.getElementById('stop-btn').style.display = 'none';
+         }
+        
+        function initializeUI() {
+            // Update counts
+            document.getElementById('node-count').textContent = nodes.length;
+            document.getElementById('gpu-count').textContent = nodes.length * 8;
+            
+            // Create node selector
+            const selector = document.getElementById('node-selector');
+            selector.innerHTML = nodes.map((node, idx) => `
+                <div class="node-tab ${idx === 0 ? 'active' : ''}" onclick="selectNode('${node}')">
+                    ${node}
+                </div>
+            `).join('');
+            
+            // Create GPU grid
+            const gpuGrid = document.getElementById('gpu-grid');
+            gpuGrid.innerHTML = Array.from({length: 8}, (_, i) => `
+                <div class="gpu-box" id="gpu-${i}">
+                    <div class="gpu-label">GPU ${i}</div>
+                    <div class="gpu-value" id="gpu-${i}-value">0%</div>
+                    <div class="gpu-metric" id="gpu-${i}-temp">0°C</div>
+                </div>
+            `).join('');
+        }
+        
+         function addLog(level, source, message, details = '') {
+             const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+             
+             const logLine = document.createElement('div');
+             logLine.className = 'log-line';
+             
+             let logHTML = `<span class="log-timestamp">${timestamp}</span>`;
+             logHTML += `<span class="log-level-${level}">[${level.padEnd(6)}]</span> `;
+             logHTML += `<span class="log-node">${source}</span> `;
+             logHTML += `${message}`;
+             if (details) {
+                 logHTML += ` <span class="log-value">${details}</span>`;
+             }
+             
+             logLine.innerHTML = logHTML;
+             
+             const terminal = document.getElementById('terminal-content');
+             terminal.appendChild(logLine);
+             
+             logBuffer.push(logLine);
+             
+             // Keep only last N lines
+             if (logBuffer.length > MAX_LOG_LINES) {
+                 const removed = logBuffer.shift();
+                 removed.remove();
+             }
+             
+             // Auto-scroll to bottom
+             const terminalContainer = document.getElementById('terminal');
+             terminalContainer.scrollTop = terminalContainer.scrollHeight;
+         }
+        
+        function updateSimulation() {
+            if (!simulationRunning) return;
+            
+            const data = nodeData[currentNode];
+            if (!data || data.length === 0) return;
+            
+            // Calculate aggregate metrics
+            let totalUtil = 0;
+            let totalTemp = 0;
+            let totalPower = 0;
+            let healthScore = 100;
+            let activeGpus = 0;
+            
+            for (let i = 0; i < 8; i++) {
+                const gpuData = data[i];
+                if (!gpuData || !gpuData.utilization) continue;
+                
+                const utilIdx = dataIndex % gpuData.utilization.length;
+                const util = gpuData.utilization[utilIdx] || 0;
+                const temp = gpuData.temperature[utilIdx] || 0;
+                const power = gpuData.power[utilIdx] || 0;
+                
+                totalUtil += util;
+                 totalTemp += temp;
+                 totalPower += power;
+                 activeGpus++;
+                 
+                 // Log individual GPU metrics occasionally
+                 if (Math.random() < 0.005 && dataIndex % 5 === 0) {
+                     addLog('METRIC', `${currentNode}/GPU${i}`, `util=${util.toFixed(1)}% temp=${temp.toFixed(1)}°C power=${power.toFixed(0)}W`);
+                 }
+                 
+                 // Update GPU boxes
+                 const gpuBox = document.getElementById(`gpu-${i}`);
+                 document.getElementById(`gpu-${i}-value`).textContent = `${util.toFixed(0)}%`;
+                 document.getElementById(`gpu-${i}-temp`).textContent = `${temp.toFixed(0)}°C`;
+                
+                 // Check for issues and log them
+                 gpuBox.className = 'gpu-box active';
+                 if (temp > 85) {
+                     gpuBox.className = 'gpu-box critical';
+                     healthScore -= 10;
+                     if (Math.random() < 0.02) {
+                         addLog('ERROR', `${currentNode}/GPU${i}`, `CRITICAL TEMPERATURE: ${temp.toFixed(1)}°C`);
+                         addAlert('critical', `GPU ${i} Critical Temperature`, 
+                                 `Thermal threshold exceeded on ${currentNode}`);
+                     }
+                 } else if (temp > 80) {
+                     gpuBox.className = 'gpu-box warning';
+                     healthScore -= 5;
+                     if (Math.random() < 0.015) {
+                         addLog('WARN', `${currentNode}/GPU${i}`, `High temperature detected: ${temp.toFixed(1)}°C`);
+                     }
+                 }
+                 
+                 if (util < 10 && Math.random() < 0.01) {
+                     gpuBox.className = 'gpu-box warning';
+                     addLog('WARN', `${currentNode}/GPU${i}`, `Low utilization detected`);
+                     addAlert('warning', `GPU ${i} Low Utilization`, 
+                             `Underutilized resource on ${currentNode}`);
+                 }
+                 
+                 // High utilization logging
+                 if (util > 95 && Math.random() < 0.01) {
+                     addLog('INFO', `${currentNode}/GPU${i}`, `Peak utilization reached`);
+                 }
+                 
+                 // Power anomaly logging
+                 if (power > 400 && Math.random() < 0.008) {
+                     addLog('WARN', `${currentNode}/GPU${i}`, `High power draw detected`);
+                 }
+                 
+                 // Random system events
+                 if (Math.random() < 0.003) {
+                     const events = [
+                         `Memory check passed`,
+                         `ECC error corrected`,
+                         `Thermal throttling cleared`,
+                         `Clock speed adjusted`,
+                         `Performance state updated`
+                     ];
+                     addLog('DEBUG', `${currentNode}/GPU${i}`, events[Math.floor(Math.random() * events.length)]);
+                 }
+                 
+                 // Anomaly detection
+                 if (Math.random() < 0.005) {
+                     addLog('INFO', `${currentNode}/GPU${i}`, `Anomaly detection: pattern variance detected`);
+                     addAlert('info', `GPU ${i} Anomaly Detected`, 
+                             `Unusual behavior pattern on ${currentNode}`);
+                 }
+            }
+            
+             if (activeGpus > 0) {
+                 const avgUtil = totalUtil / activeGpus;
+                 const avgTemp = totalTemp / activeGpus;
+                 
+                 // Update metrics
+                 document.getElementById('cluster-util').textContent = `${avgUtil.toFixed(0)}%`;
+                 document.getElementById('avg-temp').textContent = `${avgTemp.toFixed(0)}°C`;
+                 document.getElementById('total-power').textContent = `${totalPower.toFixed(0)}W`;
+                 document.getElementById('health-score').textContent = Math.max(0, healthScore).toFixed(0);
+                 
+                 // Add periodic metric logs (every 10 updates)
+                 if (dataIndex % 10 === 0) {
+                     addLog('METRIC', currentNode, `Cluster avg: util=${avgUtil.toFixed(1)}% temp=${avgTemp.toFixed(1)}°C power=${totalPower.toFixed(0)}W`);
+                 }
+             }
+            
+            // Update uptime
+            const elapsed = Date.now() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('uptime').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+             // Random system-level events
+             if (Math.random() < 0.01) {
+                 const systemEvents = [
+                     { level: 'INFO', msg: 'Health check completed - all systems operational' },
+                     { level: 'DEBUG', msg: 'Network latency: 0.2ms avg' },
+                     { level: 'INFO', msg: 'Storage sync completed' },
+                     { level: 'DEBUG', msg: 'Distributed cache refresh' },
+                     { level: 'INFO', msg: 'Workload rebalancing initiated' }
+                 ];
+                 const event = systemEvents[Math.floor(Math.random() * systemEvents.length)];
+                 addLog(event.level, 'CLUSTER', event.msg);
+             }
+             
+             dataIndex++;
+             
+             // Loop back to start
+             if (dataIndex >= 1000) {
+                 dataIndex = 0;
+                 addLog('INFO', 'SYSTEM', 'Metrics loop cycled, continuing monitoring...');
+             }
+         }
+        
+        
+        function addAlert(type, title, details) {
+            alertCount++;
+            document.getElementById('alert-count').textContent = alertCount;
+            
+            const container = document.getElementById('alerts-container');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const alert = document.createElement('div');
+            alert.className = `alert-item ${type}`;
+            alert.innerHTML = `
+                <div class="alert-time">${timestamp}</div>
+                <div class="alert-title">${title}</div>
+                <div class="alert-details">${details}</div>
+            `;
+            
+            container.insertBefore(alert, container.firstChild);
+            
+            // Keep only last 20 alerts
+            while (container.children.length > 20) {
+                container.removeChild(container.lastChild);
+            }
+        }
+        
+         function selectNode(node) {
+             currentNode = node;
+             dataIndex = 0;
+             
+             addLog('INFO', 'SYSTEM', `Switched monitoring to node: ${node}`);
+             
+             // Update active tab
+             document.querySelectorAll('.node-tab').forEach(tab => {
+                 tab.classList.remove('active');
+             });
+             event.target.classList.add('active');
+         }
+    </script>
+</body>
+</html>

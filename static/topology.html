@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Cluster Topology</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/vis-network.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/dist/vis-network.min.css" rel="stylesheet">
+    <style>
+        #force-directed-view, #datacenter-view {
+            background: var(--bg-primary);
+            min-height: calc(100vh - 200px);
+        }
+        
+        .view-container {
+            display: none;
+            padding: var(--spacing-lg);
+        }
+        
+        .view-container.active {
+            display: block;
+        }
+        
+        .cluster-section {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .rack-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+        }
+        
+        .gpu-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: var(--spacing-sm);
+        }
+        
+        .gpu-cell {
+            aspect-ratio: 1;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .gpu-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+        
+        .gpu-cell.excellent {
+            background: rgba(63, 185, 80, 0.15);
+            border-color: var(--status-excellent);
+            color: var(--status-excellent);
+        }
+        
+        .gpu-cell.good {
+            background: rgba(88, 166, 255, 0.15);
+            border-color: var(--status-good);
+            color: var(--status-good);
+        }
+        
+        .gpu-cell.warning {
+            background: rgba(210, 153, 34, 0.15);
+            border-color: var(--status-warning);
+            color: var(--status-warning);
+        }
+        
+        .gpu-cell.critical {
+            background: rgba(248, 81, 73, 0.15);
+            border-color: var(--status-critical);
+            color: var(--status-critical);
+        }
+        
+        .controls {
+            position: fixed;
+            top: 140px;
+            left: var(--spacing-lg);
+            z-index: 50;
+        }
+        
+        .control-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .stats-panel {
+            position: fixed;
+            top: 140px;
+            right: var(--spacing-lg);
+            max-width: 300px;
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+            z-index: 50;
+        }
+        
+        .gpu-tooltip {
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: var(--spacing-md);
+            display: none;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: var(--shadow-lg);
+            min-width: 250px;
+        }
+        
+        .tooltip-header {
+            font-weight: 600;
+            color: var(--accent-primary);
+            margin-bottom: var(--spacing-sm);
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: var(--spacing-sm);
+        }
+        
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        
+        .tooltip-label {
+            color: var(--text-secondary);
+        }
+        
+        .tooltip-value {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="flex justify-between items-center mb-sm">
+            <h1>GPU Cluster Topology</h1>
+            <div style="font-size: 24px; font-weight: 600; color: var(--accent-primary); font-family: var(--font-mono);">Oru'el</div>
+        </div>
+        <p class="subtitle">Network visualization and datacenter rack layout</p>
+        
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab">Overview</a>
+            <a href="topology.html" class="nav-tab active">Topology</a>
+            <a href="predictive_maintenance.html" class="nav-tab">Predictive Maintenance</a>
+            <a href="advanced.html" class="nav-tab">Advanced Analytics</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>Loading topology data...</span>
+        </div>
+        
+        <!-- View Tabs -->
+        <div id="content" style="display: none;">
+            <div class="card mb-lg">
+                <div class="flex gap-sm">
+                    <button class="btn btn-primary" onclick="switchView('force')">Force-Directed Graph</button>
+                    <button class="btn btn-secondary" onclick="switchView('datacenter')">Datacenter Rack View</button>
+                    <div style="flex: 1;"></div>
+                    <input type="text" class="search-input" placeholder="Search GPU..." id="searchInput" style="width: 250px;">
+                </div>
+            </div>
+            
+            <!-- Force-Directed View -->
+            <div id="force-view-container" class="view-container active">
+                <div class="controls">
+                    <button class="btn btn-secondary control-btn" onclick="resetZoom()">Reset Zoom</button>
+                    <button class="btn btn-secondary control-btn" onclick="togglePhysics()">Toggle Physics</button>
+                    <button class="btn btn-secondary control-btn" onclick="fitNetwork()">Fit Screen</button>
+                </div>
+                
+                <div id="force-directed-view" style="height: 800px; border: 1px solid var(--border-color); border-radius: 6px;"></div>
+            </div>
+            
+            <!-- Datacenter View -->
+            <div id="datacenter-view-container" class="view-container">
+                <div id="datacenter-view"></div>
+            </div>
+            
+            <!-- Stats Panel -->
+            <div class="stats-panel card">
+                <div class="card-title mb-md">Cluster Statistics</div>
+                <div id="statsContent"></div>
+            </div>
+            
+            <!-- GPU Tooltip -->
+            <div class="gpu-tooltip" id="gpuTooltip"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let topologyData = null;
+        let network = null;
+        let currentView = 'force';
+        let physicsEnabled = true;
+        
+        function getHealthColor(health) {
+            if (health >= 90) return '#3fb950';
+            if (health >= 70) return '#58a6ff';
+            if (health >= 50) return '#d29922';
+            return '#f85149';
+        }
+        
+        function getHealthClass(health) {
+            if (health >= 90) return 'excellent';
+            if (health >= 70) return 'good';
+            if (health >= 50) return 'warning';
+            return 'critical';
+        }
+        
+        async function loadTopologyData() {
+            try {
+                const response = await fetch(`${API_URL}/topology-full`);
+                topologyData = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+                renderForceDirectedView();
+                renderDatacenterView();
+                renderStats();
+                
+            } catch (error) {
+                console.error('Error loading topology:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div class="alert alert-critical">Error loading topology. Ensure server is running.</div>';
+            }
+        }
+        
+        function renderForceDirectedView() {
+            const container = document.getElementById('force-directed-view');
+            
+            const nodes = [];
+            const edges = [];
+            
+            topologyData.gpus.forEach(gpu => {
+                nodes.push({
+                    id: gpu.gpu_id,
+                    label: `GPU ${gpu.gpu_id}`,
+                    group: gpu.cluster_id,
+                    color: {
+                        background: getHealthColor(gpu.health_score),
+                        border: '#30363d',
+                        highlight: { background: getHealthColor(gpu.health_score), border: '#58a6ff' }
+                    },
+                    shape: 'dot',
+                    size: 12 + (gpu.health_score / 15),
+                    font: { color: '#8b949e', size: 10 },
+                    data: gpu
+                });
+            });
+            
+            topologyData.links.forEach(link => {
+                edges.push({
+                    from: link.source,
+                    to: link.target,
+                    color: { color: link.type === 'nvlink' ? '#58a6ff' : '#30363d', opacity: 0.5 },
+                    width: link.type === 'nvlink' ? 1.5 : 0.5
+                });
+            });
+            
+            const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+            
+            const options = {
+                physics: {
+                    enabled: true,
+                    forceAtlas2Based: {
+                        gravitationalConstant: -50,
+                        centralGravity: 0.01,
+                        springLength: 100,
+                        springConstant: 0.08
+                    },
+                    stabilization: { iterations: 100 }
+                },
+                interaction: { hover: true },
+                nodes: { borderWidth: 2 }
+            };
+            
+            network = new vis.Network(container, data, options);
+            
+            network.on('click', function(params) {
+                if (params.nodes.length > 0) {
+                    const gpu = topologyData.gpus.find(g => g.gpu_id === params.nodes[0]);
+                    if (gpu) alert(`GPU ${gpu.gpu_id}\nHealth: ${gpu.health_score.toFixed(1)}\nStatus: ${gpu.status}`);
+                }
+            });
+        }
+        
+        function renderDatacenterView() {
+            const container = document.getElementById('datacenter-view');
+            
+            const clusters = {};
+            topologyData.gpus.forEach(gpu => {
+                if (!clusters[gpu.cluster_id]) clusters[gpu.cluster_id] = {};
+                if (!clusters[gpu.cluster_id][gpu.hostname]) clusters[gpu.cluster_id][gpu.hostname] = [];
+                clusters[gpu.cluster_id][gpu.hostname].push(gpu);
+            });
+            
+            let html = '';
+            
+            Object.keys(clusters).sort((a, b) => a - b).forEach(clusterId => {
+                const clusterNodes = clusters[clusterId];
+                const totalGPUs = Object.values(clusterNodes).flat().length;
+                const avgHealth = Object.values(clusterNodes).flat()
+                    .reduce((sum, gpu) => sum + gpu.health_score, 0) / totalGPUs;
+                
+                html += `
+                    <div class="cluster-section">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Cluster ${clusterId}</div>
+                                    <div class="card-subtitle">${Object.keys(clusterNodes).length} nodes | ${totalGPUs} GPUs | Avg Health: ${avgHealth.toFixed(1)}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="rack-grid">
+                `;
+                
+                Object.keys(clusterNodes).sort().forEach(hostname => {
+                    const gpus = clusterNodes[hostname];
+                    const nodeHealth = gpus.reduce((sum, g) => sum + g.health_score, 0) / gpus.length;
+                    
+                    html += `
+                        <div class="card" style="padding: var(--spacing-md);">
+                            <div class="flex justify-between items-center mb-sm">
+                                <div class="text-sm font-bold">${hostname}</div>
+                                <div class="status-badge ${getHealthClass(nodeHealth)}">${nodeHealth.toFixed(0)}</div>
+                            </div>
+                            <div class="gpu-grid">
+                    `;
+                    
+                    gpus.forEach(gpu => {
+                        html += `
+                            <div class="gpu-cell ${getHealthClass(gpu.health_score)}" 
+                                 onmouseenter="showGPUTooltip(event, ${JSON.stringify(gpu).replace(/"/g, '&quot;')})"
+                                 onmouseleave="hideGPUTooltip()">
+                                ${gpu.gpu_id}
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function renderStats() {
+            const healthDist = {excellent: 0, good: 0, warning: 0, critical: 0};
+            topologyData.gpus.forEach(gpu => {
+                const cls = getHealthClass(gpu.health_score);
+                if (healthDist[cls] !== undefined) healthDist[cls]++;
+            });
+            
+            const stats = {
+                'Total GPUs': topologyData.total_gpus,
+                'Total Clusters': topologyData.num_clusters,
+                'Total Nodes': topologyData.num_nodes,
+                'Excellent': healthDist.excellent,
+                'Good': healthDist.good,
+                'Warning': healthDist.warning,
+                'Critical': healthDist.critical
+            };
+            
+            let html = '';
+            Object.entries(stats).forEach(([label, value]) => {
+                html += `
+                    <div class="metric-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-subtle);">
+                        <span class="text-secondary text-xs">${label}</span>
+                        <span class="text-mono font-bold">${value}</span>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('statsContent').innerHTML = html;
+        }
+        
+        function showGPUTooltip(event, gpu) {
+            const tooltip = document.getElementById('gpuTooltip');
+            
+            tooltip.innerHTML = `
+                <div class="tooltip-header">GPU ${gpu.gpu_id}</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Hostname:</span>
+                    <span class="tooltip-value">${gpu.hostname}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Cluster:</span>
+                    <span class="tooltip-value">${gpu.cluster_id}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Health Score:</span>
+                    <span class="tooltip-value text-${getHealthClass(gpu.health_score)}">${gpu.health_score.toFixed(1)}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Status:</span>
+                    <span class="tooltip-value">${gpu.status}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">RUL:</span>
+                    <span class="tooltip-value">${gpu.rul_days.toFixed(1)} days</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Temperature:</span>
+                    <span class="tooltip-value">${gpu.temperature ? gpu.temperature.toFixed(1) + '°C' : 'N/A'}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Utilization:</span>
+                    <span class="tooltip-value">${gpu.utilization ? gpu.utilization.toFixed(1) + '%' : 'N/A'}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Power:</span>
+                    <span class="tooltip-value">${gpu.power ? gpu.power.toFixed(0) + 'W' : 'N/A'}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Risk Level:</span>
+                    <span class="tooltip-value text-${gpu.risk_level === 'Critical' ? 'critical' : gpu.risk_level === 'High' ? 'warning' : 'good'}">${gpu.risk_level}</span>
+                </div>
+            `;
+            
+            tooltip.style.display = 'block';
+            
+            // Position tooltip near cursor but ensure it stays on screen
+            const tooltipRect = tooltip.getBoundingClientRect();
+            let left = event.clientX + 15;
+            let top = event.clientY + 15;
+            
+            // Adjust if tooltip goes off screen
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = event.clientX - tooltipRect.width - 15;
+            }
+            if (top + tooltipRect.height > window.innerHeight) {
+                top = event.clientY - tooltipRect.height - 15;
+            }
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+        
+        function hideGPUTooltip() {
+            document.getElementById('gpuTooltip').style.display = 'none';
+        }
+        
+        function switchView(view) {
+            document.querySelectorAll('.view-container').forEach(c => c.classList.remove('active'));
+            if (view === 'force') {
+                document.getElementById('force-view-container').classList.add('active');
+            } else {
+                document.getElementById('datacenter-view-container').classList.add('active');
+            }
+        }
+        
+        function resetZoom() { if (network) network.fit(); }
+        function togglePhysics() {
+            physicsEnabled = !physicsEnabled;
+            if (network) network.setOptions({ physics: { enabled: physicsEnabled } });
+        }
+        function fitNetwork() { if (network) network.fit({ animation: true }); }
+        
+        // Search
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            if (query.length < 2 || !network) return;
+            
+            const matching = topologyData.gpus.filter(gpu => 
+                gpu.gpu_id.toLowerCase().includes(query) ||
+                gpu.hostname.toLowerCase().includes(query)
+            );
+            
+            if (matching.length > 0) {
+                const nodeIds = matching.map(gpu => gpu.gpu_id);
+                network.selectNodes(nodeIds);
+                network.focus(nodeIds[0], { scale: 2, animation: true });
+            }
+        });
+        
+        loadTopologyData();
+        setInterval(loadTopologyData, 30000);
+    </script>
+</body>
+</html>

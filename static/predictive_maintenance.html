@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictive Maintenance</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .alert-banner {
+            border-left: 4px solid var(--status-critical);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .timeline {
+            position: relative;
+            padding: var(--spacing-lg) 0;
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+            position: relative;
+        }
+        
+        .timeline-date {
+            min-width: 120px;
+            text-align: right;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .timeline-marker {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            border: 3px solid var(--bg-primary);
+            position: relative;
+            z-index: 2;
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+        
+        .timeline-marker.critical { background: var(--status-critical); }
+        .timeline-marker.warning { background: var(--status-warning); }
+        
+        .timeline-content {
+            flex: 1;
+            padding: var(--spacing-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        
+        .timeline-content.critical { border-left-color: var(--status-critical); border-left-width: 3px; }
+        .timeline-content.warning { border-left-color: var(--status-warning); border-left-width: 3px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="flex justify-between items-center mb-sm">
+            <h1>Predictive Maintenance</h1>
+            <div style="font-size: 24px; font-weight: 600; color: var(--accent-primary); font-family: var(--font-mono);">Oru'el</div>
+        </div>
+        <p class="subtitle">Real-time anomaly detection and failure prediction</p>
+        
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab">Overview</a>
+            <a href="topology.html" class="nav-tab">Topology</a>
+            <a href="predictive_maintenance.html" class="nav-tab active">Predictive Maintenance</a>
+            <a href="advanced.html" class="nav-tab">Advanced Analytics</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>Loading predictive analytics...</span>
+        </div>
+        
+        <div id="content" style="display: none;">
+            <!-- Key Metrics -->
+            <div class="metrics-grid mb-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Critical GPUs</div>
+                    <div class="metric-value text-critical" id="criticalCount">0</div>
+                    <div class="metric-change text-secondary text-xs">Immediate attention required</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">High Risk</div>
+                    <div class="metric-value text-warning" id="highRiskCount">0</div>
+                    <div class="metric-change text-secondary text-xs">RUL &lt; 7 days</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Anomalies (24h)</div>
+                    <div class="metric-value" id="anomalyCount">0</div>
+                    <div class="metric-change text-secondary text-xs">Detected anomalies</div>
+                </div>
+            </div>
+            
+            <!-- Active Alerts -->
+            <div id="alertSection" class="card mb-lg" style="display: none;">
+                <div class="card-header">
+                    <div class="card-title text-critical">⚠️ Active Anomaly Alerts</div>
+                    <div class="card-subtitle">Real-time anomaly detection with root cause analysis</div>
+                </div>
+                <div id="alertList" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+            
+            <!-- Maintenance Timeline -->
+            <div class="card mb-lg">
+                <div class="card-header">
+                    <div class="card-title">Maintenance Timeline</div>
+                    <div class="card-subtitle">Predicted maintenance windows</div>
+                </div>
+                <div class="timeline" id="maintenanceTimeline"></div>
+            </div>
+            
+            <!-- Charts -->
+            <div class="grid-2 mb-lg">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">RUL Distribution</div>
+                    </div>
+                    <canvas id="rulChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Failure Probability Forecast</div>
+                    </div>
+                    <canvas id="failureProbChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="grid-2 mb-lg">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Health Score Distribution</div>
+                    </div>
+                    <canvas id="healthChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Anomaly Timeline (24h)</div>
+                    </div>
+                    <canvas id="anomalyChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- GPU List -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">GPU Risk Assessment</div>
+                        <div class="card-subtitle">Detailed risk analysis per GPU</div>
+                    </div>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-secondary" onclick="filterGPUs('all')">All</button>
+                        <button class="btn btn-secondary" onclick="filterGPUs('critical')">Critical</button>
+                        <button class="btn btn-secondary" onclick="filterGPUs('high-risk')">High Risk</button>
+                    </div>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>GPU ID</th>
+                                <th>Hostname</th>
+                                <th>Health</th>
+                                <th>RUL (days)</th>
+                                <th>Risk Level</th>
+                                <th>Root Cause</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gpuTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let predictiveData = null;
+        let currentFilter = 'all';
+        
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = '#30363d';
+        
+        async function loadPredictiveData() {
+            try {
+                const response = await fetch(`${API_URL}/predictive-maintenance-summary`);
+                predictiveData = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+                renderMetrics();
+                renderAlerts();
+                renderTimeline();
+                renderCharts();
+                renderGPUTable();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div class="alert alert-critical">Error loading data. Ensure server is running.</div>';
+            }
+        }
+        
+        function renderMetrics() {
+            const critical = predictiveData.gpus.filter(g => g.risk_level === 'Critical').length;
+            const highRisk = predictiveData.gpus.filter(g => g.rul_days < 7).length;
+            const totalAnomalies = predictiveData.gpus.reduce((sum, g) => sum + (g.anomaly_count || 0), 0);
+            
+            document.getElementById('criticalCount').textContent = critical;
+            document.getElementById('highRiskCount').textContent = highRisk;
+            document.getElementById('anomalyCount').textContent = totalAnomalies;
+        }
+        
+        function renderAlerts() {
+            const alerts = predictiveData.gpus.filter(g => 
+                g.risk_level === 'Critical' || g.rul_days < 7 || g.anomaly_score > 0.7
+            ).slice(0, 10);
+            
+            if (alerts.length === 0) return;
+            
+            document.getElementById('alertSection').style.display = 'block';
+            
+            const html = alerts.map(gpu => {
+                const severity = gpu.risk_level === 'Critical' ? 'critical' : 'warning';
+                const action = (gpu.actions && gpu.actions.length > 0) ? gpu.actions[0] : 'Attention required';
+                
+                // Build causes display
+                let causesHtml = '';
+                if (gpu.causes && gpu.causes.length > 0) {
+                    causesHtml = `
+                        <div style="margin-top: 8px; padding: 8px; background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--accent-warning); border-radius: 3px;">
+                            <div class="text-xs font-bold" style="color: var(--accent-warning); margin-bottom: 4px;">Root Cause Analysis:</div>
+                            <ul style="margin: 0; padding-left: 16px;">
+                                ${gpu.causes.map(cause => `<li class="text-xs">${cause}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="alert alert-${severity}" style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div><strong>GPU ${gpu.gpu_id}</strong> <span class="text-secondary text-xs">${gpu.hostname}</span></div>
+                                <div class="text-sm" style="margin-top: 4px;">${action}</div>
+                                ${causesHtml}
+                            </div>
+                            <div style="text-align: right; min-width: 120px;">
+                                <div class="text-xs text-secondary">RUL</div>
+                                <div class="text-lg font-bold">${gpu.rul_days.toFixed(1)}d</div>
+                                <div class="text-xs" style="color: var(--text-tertiary);">Health: ${gpu.health_score.toFixed(0)}%</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('alertList').innerHTML = html;
+        }
+        
+        function renderTimeline() {
+            const windows = {
+                'Next 24 Hours': [],
+                'Next 7 Days': [],
+                'Next 30 Days': [],
+                'Next 90 Days': []
+            };
+            
+            predictiveData.gpus.forEach(gpu => {
+                if (gpu.rul_days < 1) windows['Next 24 Hours'].push(gpu);
+                else if (gpu.rul_days < 7) windows['Next 7 Days'].push(gpu);
+                else if (gpu.rul_days < 30) windows['Next 30 Days'].push(gpu);
+                else if (gpu.rul_days < 90) windows['Next 90 Days'].push(gpu);
+            });
+            
+            const html = Object.entries(windows).map(([window, gpus]) => {
+                if (gpus.length === 0) return '';
+                
+                const severity = window === 'Next 24 Hours' ? 'critical' : 
+                               window === 'Next 7 Days' ? 'warning' : '';
+                
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-date">${window}</div>
+                        <div class="timeline-marker ${severity}"></div>
+                        <div class="timeline-content ${severity}">
+                            <div class="font-bold mb-sm">${gpus.length} GPU${gpus.length > 1 ? 's' : ''} Require Maintenance</div>
+                            <div class="text-xs text-secondary">
+                                ${gpus.slice(0, 5).map(g => `GPU ${g.gpu_id}`).join(', ')}
+                                ${gpus.length > 5 ? ` and ${gpus.length - 5} more` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('maintenanceTimeline').innerHTML = html || '<div class="text-secondary">No maintenance scheduled</div>';
+        }
+        
+        function renderCharts() {
+            // RUL Distribution
+            const rulRanges = {'< 1 day': 0, '1-7 days': 0, '1-4 weeks': 0, '1-3 months': 0, '> 3 months': 0};
+            predictiveData.gpus.forEach(gpu => {
+                if (gpu.rul_days < 1) rulRanges['< 1 day']++;
+                else if (gpu.rul_days < 7) rulRanges['1-7 days']++;
+                else if (gpu.rul_days < 30) rulRanges['1-4 weeks']++;
+                else if (gpu.rul_days < 90) rulRanges['1-3 months']++;
+                else rulRanges['> 3 months']++;
+            });
+            
+            new Chart(document.getElementById('rulChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(rulRanges),
+                    datasets: [{
+                        data: Object.values(rulRanges),
+                        backgroundColor: ['#f8514966', '#d2992266', '#fbbf2466', '#60a5fa66', '#3fb95066'],
+                        borderColor: ['#f85149', '#d29922', '#fbbf24', '#60a5fa', '#3fb950'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#21262d' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+            
+            // Failure Probability
+            const failureProbs = {'24h': [], '7d': [], '30d': []};
+            predictiveData.gpus.forEach(gpu => {
+                failureProbs['24h'].push(gpu.failure_probability_24h || 0);
+                failureProbs['7d'].push(gpu.failure_probability_7d || 0);
+                failureProbs['30d'].push(gpu.failure_probability_30d || 0);
+            });
+            
+            const avgProbs = Object.entries(failureProbs).map(([key, probs]) => ({
+                window: key,
+                avg: probs.reduce((sum, p) => sum + p, 0) / probs.length
+            }));
+            
+            new Chart(document.getElementById('failureProbChart'), {
+                type: 'line',
+                data: {
+                    labels: avgProbs.map(p => p.window),
+                    datasets: [{
+                        data: avgProbs.map(p => p.avg * 100),
+                        borderColor: '#f85149',
+                        backgroundColor: '#f8514933',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, grid: { color: '#21262d' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+            
+            // Health Distribution
+            const healthRanges = {'Excellent': 0, 'Good': 0, 'Fair': 0, 'Warning': 0, 'Critical': 0};
+            predictiveData.gpus.forEach(gpu => {
+                if (gpu.health_score >= 90) healthRanges['Excellent']++;
+                else if (gpu.health_score >= 80) healthRanges['Good']++;
+                else if (gpu.health_score >= 70) healthRanges['Fair']++;
+                else if (gpu.health_score >= 50) healthRanges['Warning']++;
+                else healthRanges['Critical']++;
+            });
+            
+            new Chart(document.getElementById('healthChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(healthRanges),
+                    datasets: [{
+                        data: Object.values(healthRanges),
+                        backgroundColor: ['#3fb95066', '#58a6ff66', '#fbbf2466', '#d2992266', '#f8514966'],
+                        borderColor: ['#3fb950', '#58a6ff', '#fbbf24', '#d29922', '#f85149'],
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true }
+            });
+            
+            // Anomaly Timeline (mock)
+            const anomalyData = Array.from({length: 24}, (_, i) => Math.floor(Math.random() * 15));
+            
+            new Chart(document.getElementById('anomalyChart'), {
+                type: 'line',
+                data: {
+                    labels: anomalyData.map((_, i) => `${i}:00`),
+                    datasets: [{
+                        data: anomalyData,
+                        borderColor: '#d29922',
+                        backgroundColor: '#d2992233',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#21262d' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+        
+        function renderGPUTable() {
+            let gpus = predictiveData.gpus;
+            
+            if (currentFilter === 'critical') gpus = gpus.filter(g => g.risk_level === 'Critical');
+            else if (currentFilter === 'high-risk') gpus = gpus.filter(g => g.rul_days < 7);
+            
+            const html = gpus.map(gpu => {
+                const healthClass = gpu.health_score >= 80 ? 'excellent' : 
+                                  gpu.health_score >= 50 ? 'warning' : 'critical';
+                const riskClass = gpu.risk_level === 'Critical' ? 'critical' : 
+                                gpu.risk_level === 'High' ? 'warning' : 'good';
+                
+                // Get primary root cause
+                let rootCause = 'Normal operation';
+                if (gpu.causes && gpu.causes.length > 0) {
+                    rootCause = gpu.causes[0];
+                    if (gpu.causes.length > 1) {
+                        rootCause += ` <span class="text-tertiary">(+${gpu.causes.length - 1})</span>`;
+                    }
+                }
+                
+                return `
+                    <tr onclick="window.location.href='gpu_details.html?gpu=${gpu.gpu_id}'" style="cursor: pointer;">
+                        <td class="text-mono font-bold">${gpu.gpu_id}</td>
+                        <td class="text-sm">${gpu.hostname}</td>
+                        <td><span class="status-badge ${healthClass}">${gpu.health_score.toFixed(0)}</span></td>
+                        <td class="text-mono">${gpu.rul_days.toFixed(1)}</td>
+                        <td><span class="status-badge ${riskClass}">${gpu.risk_level}</span></td>
+                        <td class="text-xs">${rootCause}</td>
+                        <td class="text-xs text-secondary">${gpu.status}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            document.getElementById('gpuTableBody').innerHTML = html;
+        }
+        
+        function filterGPUs(filter) {
+            currentFilter = filter;
+            renderGPUTable();
+        }
+        
+        loadPredictiveData();
+        setInterval(loadPredictiveData, 30000);
+    </script>
+</body>
+</html>

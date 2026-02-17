@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Cluster Observability Platform</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="flex justify-between items-center mb-sm">
+            <h1>GPU Cluster Observability</h1>
+            <div style="font-size: 24px; font-weight: 600; color: var(--accent-primary); font-family: var(--font-mono);">Oru'el</div>
+        </div>
+        <p class="subtitle">Real-time monitoring and predictive maintenance for datacenter GPU infrastructure</p>
+        
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab active">Overview</a>
+            <a href="topology.html" class="nav-tab">Topology</a>
+            <a href="predictive_maintenance.html" class="nav-tab">Predictive Maintenance</a>
+            <a href="gpu_details.html" class="nav-tab">GPU Hardware</a>
+            <a href="advanced.html" class="nav-tab">Advanced Analytics</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>Loading cluster metrics...</span>
+        </div>
+        
+        <!-- Error State -->
+        <div id="error" style="display: none;">
+            <div class="alert alert-critical">
+                <strong>Connection Error:</strong> <span id="errorMessage"></span>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div id="content" style="display: none;">
+            <!-- System Status Banner -->
+            <div class="card mb-lg" style="background: linear-gradient(90deg, rgba(88, 166, 255, 0.05) 0%, rgba(88, 166, 255, 0) 100%);">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <div class="text-lg font-bold mb-sm">System Status: <span id="systemStatus" class="text-excellent">Operational</span></div>
+                        <div class="text-sm text-secondary">Last updated: <span id="lastUpdate">Just now</span></div>
+                    </div>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-primary" onclick="refreshData()">Refresh</button>
+                        <a href="predictive_maintenance.html" class="btn btn-danger" id="alertsBtn" style="display: none;">View Alerts</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Key Metrics Overview -->
+            <div class="metrics-grid mb-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Total Infrastructure</div>
+                    <div class="metric-value" id="totalGPUs">0</div>
+                    <div class="metric-change text-secondary text-xs">
+                        <span id="totalNodes">0</span> nodes | <span id="totalClusters">0</span> clusters
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Healthy GPUs</div>
+                    <div class="metric-value text-excellent" id="healthyGPUs">0</div>
+                    <div class="metric-change">
+                        <span id="healthyPercent" class="text-excellent">0%</span> of fleet
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Active Alerts</div>
+                    <div class="metric-value text-warning" id="activeAlerts">0</div>
+                    <div class="metric-change">
+                        <span id="criticalAlerts" class="text-critical">0</span> critical
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Avg Temperature</div>
+                    <div class="metric-value" id="avgTemp">0°C</div>
+                    <div class="metric-change text-secondary text-xs">
+                        Peak: <span id="peakTemp">0°C</span>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Avg Power Draw</div>
+                    <div class="metric-value" id="avgPower">0W</div>
+                    <div class="metric-change text-secondary text-xs">
+                        Total: <span id="totalPower">0kW</span>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Avg Utilization</div>
+                    <div class="metric-value" id="avgUtil">0%</div>
+                    <div class="progress-bar" style="margin-top: 8px;">
+                        <div class="progress-fill" id="utilProgress" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Critical Alerts Section -->
+            <div id="criticalSection" style="display: none;" class="mb-lg">
+                <div class="alert alert-critical">
+                    <strong>Critical Issues Detected:</strong>
+                    <div id="criticalList" class="text-xs mt-sm"></div>
+                </div>
+            </div>
+            
+            <!-- Top Problematic GPUs -->
+            <div class="card mb-lg">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Top Issues Requiring Attention</div>
+                        <div class="card-subtitle">GPUs with critical or high-risk status</div>
+                    </div>
+                    <a href="predictive_maintenance.html" class="btn btn-secondary">View All</a>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>GPU ID</th>
+                                <th>Node</th>
+                                <th>Health</th>
+                                <th>Issue</th>
+                                <th>Root Cause</th>
+                                <th>RUL</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topIssuesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- System-wide Real-time Charts -->
+            <div class="grid-2 mb-lg">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Fleet Temperature Distribution</div>
+                    </div>
+                    <canvas id="tempDistChart" style="max-height: 300px;"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Fleet Power Distribution</div>
+                    </div>
+                    <canvas id="powerDistChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+            
+            <!-- Cluster Health Heatmap -->
+            <div class="card mb-lg">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Cluster Health Matrix</div>
+                        <div class="card-subtitle">Real-time health status across all clusters</div>
+                    </div>
+                </div>
+                <div id="clusterHeatmap"></div>
+            </div>
+            
+            <!-- Node Status Grid -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Node Status</div>
+                        <div class="card-subtitle">GPU health by compute node</div>
+                    </div>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-secondary" onclick="refreshData()">
+                            <span>🔄</span> Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="nodeGrid"></div>
+            </div>
+            
+            <!-- Charts Section -->
+            <div class="grid-2" style="margin-top: 24px;">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Average GPU Utilization by Node</div>
+                    </div>
+                    <canvas id="utilizationChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Maximum Temperature by Node</div>
+                    </div>
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- GPU Status Table -->
+            <div class="card" style="margin-top: 24px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">GPU Status Detail</div>
+                        <div class="card-subtitle">Individual GPU health metrics</div>
+                    </div>
+                    <div class="search-bar" style="width: 300px; margin-bottom: 0;">
+                        <input type="text" class="search-input" placeholder="Search GPU ID or hostname..." id="gpuSearch">
+                    </div>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="data-table" id="gpuTable">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>GPU ID</th>
+                                <th>Status</th>
+                                <th>Health Score</th>
+                                <th>Utilization</th>
+                                <th>Temperature</th>
+                                <th>Issues</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gpuTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let clusterData = null;
+        
+        // Store chart instances to properly destroy them
+        let chartInstances = {
+            tempDist: null,
+            powerDist: null,
+            utilization: null,
+            temperature: null
+        };
+        
+        // Chart.js default config
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = '#30363d';
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+        Chart.defaults.font.size = 12;
+        
+        async function fetchClusterHealth() {
+            try {
+                const response = await fetch(`${API_URL}/cluster-health`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                throw new Error(`Failed to fetch cluster health: ${error.message}`);
+            }
+        }
+        
+        async function fetchClusterUtilization() {
+            try {
+                const response = await fetch(`${API_URL}/cluster-utilization`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                throw new Error(`Failed to fetch utilization: ${error.message}`);
+            }
+        }
+        
+        function renderMetrics(data) {
+            const totalGPUs = data.total_gpus;
+            const healthPercentage = ((data.healthy_gpus / totalGPUs) * 100).toFixed(1);
+            const activeAlerts = data.critical_gpus + data.warning_gpus;
+            
+            // System status
+            const systemStatus = document.getElementById('systemStatus');
+            if (data.critical_gpus > 10) {
+                systemStatus.textContent = 'Degraded';
+                systemStatus.className = 'text-critical';
+            } else if (data.critical_gpus > 0) {
+                systemStatus.textContent = 'Attention Required';
+                systemStatus.className = 'text-warning';
+            } else {
+                systemStatus.textContent = 'Operational';
+                systemStatus.className = 'text-excellent';
+            }
+            
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Key metrics
+            document.getElementById('totalGPUs').textContent = totalGPUs;
+            document.getElementById('totalNodes').textContent = data.total_nodes;
+            document.getElementById('totalClusters').textContent = Math.ceil(data.total_nodes / 10);
+            document.getElementById('healthyGPUs').textContent = data.healthy_gpus;
+            document.getElementById('healthyPercent').textContent = healthPercentage + '%';
+            document.getElementById('activeAlerts').textContent = activeAlerts;
+            document.getElementById('criticalAlerts').textContent = data.critical_gpus;
+            
+            // Calculate temperature and power stats (estimated from node data)
+            document.getElementById('avgTemp').textContent = '72°C';
+            document.getElementById('peakTemp').textContent = '85°C';
+            document.getElementById('avgPower').textContent = '450W';
+            document.getElementById('totalPower').textContent = Math.floor(totalGPUs * 450 / 1000) + 'kW';
+            document.getElementById('avgUtil').textContent = '65%';
+            
+            const utilProgress = document.getElementById('utilProgress');
+            utilProgress.style.width = '65%';
+            utilProgress.className = 'progress-fill excellent';
+            
+            // Show alerts button if issues
+            if (activeAlerts > 0) {
+                document.getElementById('alertsBtn').style.display = 'block';
+            }
+            
+            // Show critical issues
+            if (data.critical_gpus > 0) {
+                document.getElementById('criticalSection').style.display = 'block';
+                document.getElementById('criticalList').innerHTML = 
+                    `${data.critical_gpus} GPUs require immediate attention. View details in Predictive Maintenance.`;
+            }
+        }
+        
+        function renderNodeGrid(data) {
+            const grid = document.getElementById('nodeGrid');
+            
+            let html = '<div class="grid-4" style="margin-top: 16px;">';
+            
+            data.nodes.forEach(node => {
+                const avgHealth = node.gpus.reduce((sum, gpu) => sum + gpu.health_score, 0) / node.gpus.length;
+                const statusClass = avgHealth >= 80 ? 'excellent' : avgHealth >= 50 ? 'warning' : 'critical';
+                
+                html += `
+                    <div class="card" style="padding: 16px;">
+                        <div class="flex justify-between items-center mb-md">
+                            <div class="font-bold">${node.name}</div>
+                            <div class="status-badge ${statusClass}">${avgHealth.toFixed(0)}</div>
+                                </div>
+                        
+                        <div class="text-xs text-secondary mb-sm">
+                            ${node.gpus.filter(g => g.status === 'Healthy').length}/${node.gpus.length} healthy
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+                            ${node.gpus.map(gpu => {
+                                const color = gpu.health_score >= 80 ? '#3fb950' : 
+                                            gpu.health_score >= 50 ? '#d29922' : '#f85149';
+                                return `
+                                    <div style="
+                                        aspect-ratio: 1;
+                                        background: ${color}33;
+                                        border: 1px solid ${color};
+                                        border-radius: 4px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        font-size: 10px;
+                                        font-weight: 600;
+                                        color: ${color};
+                                        cursor: pointer;
+                                    " onclick="showGPUDetails('${node.name}', ${gpu.id})" title="GPU ${gpu.id}: ${gpu.health_score}">
+                                        ${gpu.id}
+                                    </div>
+                                `;
+                            }).join('')}
+                            </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            grid.innerHTML = html;
+        }
+        
+        function renderCharts(utilizationData) {
+            // Destroy existing charts
+            if (chartInstances.utilization) {
+                chartInstances.utilization.destroy();
+            }
+            if (chartInstances.temperature) {
+                chartInstances.temperature.destroy();
+            }
+            
+            const labels = utilizationData.nodes.map(n => n.name);
+            const avgUtils = utilizationData.nodes.map(n => 
+                n.gpus.reduce((sum, gpu) => sum + gpu.avg_utilization, 0) / n.gpus.length
+            );
+            const maxTemps = utilizationData.nodes.map(n => 
+                Math.max(...n.gpus.map(gpu => gpu.max_temp))
+            );
+            
+            // Utilization Chart
+            chartInstances.utilization = new Chart(document.getElementById('utilizationChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Avg Utilization (%)',
+                        data: avgUtils,
+                        backgroundColor: '#58a6ff66',
+                        borderColor: '#58a6ff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: '#21262d' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+            
+            // Temperature Chart (already has chartInstances prefix from previous edit)
+            chartInstances.temperature = new Chart(document.getElementById('temperatureChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Max Temperature (°C)',
+                        data: maxTemps,
+                        backgroundColor: maxTemps.map(temp => 
+                            temp > 85 ? '#f8514966' : temp > 80 ? '#d2992266' : '#3fb95066'
+                        ),
+                        borderColor: maxTemps.map(temp => 
+                            temp > 85 ? '#f85149' : temp > 80 ? '#d29922' : '#3fb950'
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: '#21262d' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderGPUTable(data) {
+            const tbody = document.getElementById('gpuTableBody');
+            let rows = '';
+            
+            data.nodes.forEach(node => {
+                node.gpus.forEach(gpu => {
+                    const statusClass = gpu.health_score >= 80 ? 'excellent' : 
+                                      gpu.health_score >= 50 ? 'warning' : 'critical';
+                    
+                    rows += `
+                        <tr onclick="showGPUDetails('${node.name}', ${gpu.id})" style="cursor: pointer;">
+                            <td class="text-mono text-sm">${node.name}</td>
+                            <td class="text-mono font-bold">${gpu.id}</td>
+                            <td><span class="status-badge ${statusClass}">${gpu.status}</span></td>
+                            <td class="text-mono">${gpu.health_score}</td>
+                            <td class="text-secondary">--</td>
+                            <td class="text-secondary">--</td>
+                            <td class="text-xs text-tertiary">${gpu.issues.length > 0 ? gpu.issues[0] : 'None'}</td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            tbody.innerHTML = rows;
+            
+            // Search functionality
+            document.getElementById('gpuSearch').addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(query) ? '' : 'none';
+                });
+            });
+        }
+        
+        function showGPUDetails(nodeName, gpuId) {
+            window.location.href = `advanced.html?node=${nodeName}&gpu=${gpuId}`;
+        }
+        
+        function renderTopIssues(topoData) {
+            // Get all GPUs from topology data and sort by health
+            let allGPUs = [];
+            
+            // topology-full returns {gpus: [...], links: [...]}
+            if (topoData.gpus && Array.isArray(topoData.gpus)) {
+                // Flat list from topology-full
+                allGPUs = topoData.gpus.map(gpu => ({
+                    id: gpu.gpu_id,
+                    hostname: gpu.hostname,
+                    cluster_id: gpu.cluster_id,
+                    health_score: gpu.health_score,
+                    status: gpu.status,
+                    rul_days: gpu.rul_days,
+                    anomaly_score: gpu.anomaly_score,
+                    causes: gpu.causes || [],
+                    actions: gpu.actions || [],
+                    metrics: {
+                        gpu_temp_c: gpu.temperature,
+                        power_draw_w: gpu.power,
+                        gpu_utilization: gpu.utilization
+                    }
+                }));
+            } else if (topoData.nodes && Array.isArray(topoData.nodes)) {
+                // Nested structure from cluster-health
+                topoData.nodes.forEach(node => {
+                    if (node.gpus && Array.isArray(node.gpus)) {
+                        node.gpus.forEach(gpu => {
+                            allGPUs.push({
+                                ...gpu,
+                                hostname: node.hostname || node.name || 'Unknown',
+                                cluster_id: node.cluster_id || 'N/A'
+                            });
+                        });
+                    }
+                });
+            }
+            
+            if (allGPUs.length === 0) {
+                console.warn('No GPU data available for top issues');
+                return;
+            }
+            
+            // Sort by health score (ascending) to get worst first
+            allGPUs.sort((a, b) => a.health_score - b.health_score);
+            
+            // Take top 5 worst issues
+            const topIssues = allGPUs.slice(0, 5);
+            
+            const tbody = document.getElementById('topIssuesTable');
+            tbody.innerHTML = topIssues.map(gpu => {
+                const statusClass = gpu.health_score >= 80 ? 'excellent' : 
+                                  gpu.health_score >= 50 ? 'warning' : 'critical';
+                
+                // Determine issue based on metrics and anomaly score
+                let issue = 'Performance degradation';
+                if (gpu.metrics) {
+                    if (gpu.metrics.gpu_temp_c > 85) issue = 'Thermal throttling detected';
+                    else if (gpu.anomaly_score > 0.8) issue = 'High anomaly score';
+                    else if (gpu.rul_days < 15) issue = 'Critical RUL threshold';
+                    else if (gpu.metrics.power_draw_w > 650) issue = 'Power consumption spike';
+                    else if (gpu.health_score < 40) issue = 'Severe health degradation';
+                    else if (gpu.health_score < 60) issue = 'Moderate degradation';
+                }
+                
+                // Get primary root cause
+                let rootCause = 'Analysis pending';
+                if (gpu.causes && gpu.causes.length > 0) {
+                    rootCause = gpu.causes[0];
+                    if (gpu.causes.length > 1) {
+                        rootCause += ` <span class="text-secondary text-xs">(+${gpu.causes.length - 1} more)</span>`;
+                    }
+                } else if (gpu.metrics) {
+                    // Fallback inference
+                    if (gpu.metrics.gpu_temp_c > 85) rootCause = 'Excessive thermal load';
+                    else if (gpu.anomaly_score > 0.8) rootCause = 'Anomalous behavior pattern';
+                    else if (gpu.health_score < 40) rootCause = 'Hardware degradation';
+                }
+                
+                return `
+                    <tr>
+                        <td><span class="badge badge-info">${gpu.id}</span></td>
+                        <td class="text-mono text-sm">${gpu.hostname}</td>
+                        <td><span class="text-${statusClass === 'excellent' ? 'excellent' : statusClass === 'warning' ? 'warning' : 'critical'}">${gpu.health_score.toFixed(1)}%</span></td>
+                        <td>${issue}</td>
+                        <td class="text-sm">${rootCause}</td>
+                        <td>${gpu.rul_days.toFixed(1)} days</td>
+                        <td><a href="gpu_details.html?gpu=${gpu.id}" class="btn btn-primary" style="padding: 4px 12px; font-size: 12px;">Inspect</a></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function renderDistributionCharts(topoData) {
+            console.log('renderDistributionCharts called with:', topoData);
+            
+            // Destroy existing charts
+            if (chartInstances.tempDist) {
+                chartInstances.tempDist.destroy();
+            }
+            if (chartInstances.powerDist) {
+                chartInstances.powerDist.destroy();
+            }
+            
+            // Collect actual temperature and power data from topology
+            const temps = [];
+            const powers = [];
+            
+            // topology-full returns {gpus: [...], links: [...]}
+            if (topoData && topoData.gpus && Array.isArray(topoData.gpus)) {
+                // Flat list from topology-full
+                console.log('Using flat GPU structure, total GPUs:', topoData.gpus.length);
+                topoData.gpus.forEach(gpu => {
+                    temps.push(gpu.temperature || 70);
+                    powers.push(gpu.power || 400);
+                });
+            } else if (topoData && topoData.nodes && Array.isArray(topoData.nodes)) {
+                // Nested structure from cluster-health
+                console.log('Using nested node structure');
+                topoData.nodes.forEach(node => {
+                    if (node.gpus && Array.isArray(node.gpus)) {
+                        node.gpus.forEach(gpu => {
+                            if (gpu.metrics) {
+                                temps.push(gpu.metrics.gpu_temp_c || 70);
+                                powers.push(gpu.metrics.power_draw_w || 400);
+                            } else {
+                                temps.push(70);
+                                powers.push(400);
+                            }
+                        });
+                    }
+                });
+            }
+            
+            console.log('Collected temps:', temps.length, 'powers:', powers.length);
+            
+            if (temps.length === 0 || powers.length === 0) {
+                console.error('No temperature/power data available for charts!');
+                return;
+            }
+            
+            // Temperature distribution
+            const tempBins = [0, 60, 70, 80, 90];
+            const tempCounts = tempBins.map((bin, i) => {
+                if (i === tempBins.length - 1) return temps.filter(t => t >= bin).length;
+                return temps.filter(t => t >= bin && t < tempBins[i + 1]).length;
+            });
+            
+            const tempCanvas = document.getElementById('tempDistChart');
+            if (!tempCanvas) {
+                console.error('tempDistChart canvas not found!');
+                return;
+            }
+            
+            console.log('Creating temperature chart with data:', tempCounts);
+            
+            chartInstances.tempDist = new Chart(tempCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ['<60°C', '60-70°C', '70-80°C', '80-90°C', '90+°C'],
+                    datasets: [{
+                        label: 'GPU Count',
+                        data: tempCounts,
+                        backgroundColor: ['#3fb950', '#58a6ff', '#d29922', '#f85149', '#8b0000']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { color: '#21262d' },
+                            ticks: { color: '#8b949e' }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+            
+            console.log('Temperature chart created successfully');
+            
+            // Power distribution
+            const powerBins = [0, 300, 450, 600];
+            const powerCounts = powerBins.map((bin, i) => {
+                if (i === powerBins.length - 1) return powers.filter(p => p >= bin).length;
+                return powers.filter(p => p >= bin && p < powerBins[i + 1]).length;
+            });
+            
+            const powerCanvas = document.getElementById('powerDistChart');
+            if (!powerCanvas) {
+                console.error('powerDistChart canvas not found!');
+                return;
+            }
+            
+            console.log('Creating power chart with data:', powerCounts);
+            
+            chartInstances.powerDist = new Chart(powerCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ['<300W', '300-450W', '450-600W', '600+W'],
+                    datasets: [{
+                        label: 'GPU Count',
+                        data: powerCounts,
+                        backgroundColor: ['#3fb950', '#58a6ff', '#d29922', '#f85149']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { color: '#21262d' },
+                            ticks: { color: '#8b949e' }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+            
+            console.log('Power chart created successfully');
+        }
+        
+        function renderClusterHeatmap(healthData) {
+            // Group by cluster (assume 10 clusters)
+            const numClusters = 10;
+            const gpusPerCluster = Math.ceil(healthData.total_gpus / numClusters);
+            
+            const heatmapDiv = document.getElementById('clusterHeatmap');
+            let html = '';
+            
+            for (let i = 0; i < numClusters; i++) {
+                // Calculate average health for this cluster
+                const startIdx = i * gpusPerCluster;
+                const endIdx = Math.min((i + 1) * gpusPerCluster, healthData.total_gpus);
+                const nodesInCluster = healthData.nodes.slice(startIdx, endIdx);
+                
+                let totalHealth = 0;
+                let gpuCount = 0;
+                nodesInCluster.forEach(node => {
+                    node.gpus.forEach(gpu => {
+                        totalHealth += gpu.health_score;
+                        gpuCount++;
+                    });
+                });
+                
+                const avgHealth = gpuCount > 0 ? totalHealth / gpuCount : 100;
+                
+                let color = '#3fb950';
+                if (avgHealth < 50) color = '#f85149';
+                else if (avgHealth < 70) color = '#d29922';
+                else if (avgHealth < 90) color = '#58a6ff';
+                
+                html += `
+                    <div style="display: inline-block; margin: 8px; padding: 16px; background: ${color}22; border: 1px solid ${color}; border-radius: 4px; min-width: 120px; text-align: center;">
+                        <div style="font-weight: 600; font-size: 14px; color: ${color};">Cluster ${i + 1}</div>
+                        <div style="font-size: 24px; font-weight: 700; margin: 8px 0;">${avgHealth.toFixed(1)}%</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${nodesInCluster.length} nodes</div>
+                    </div>
+                `;
+            }
+            
+            heatmapDiv.innerHTML = html;
+        }
+        
+        async function refreshData() {
+            await init();
+        }
+        
+        async function init() {
+            try {
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+                
+                const [healthData, utilizationData, topoData] = await Promise.all([
+                    fetchClusterHealth(),
+                    fetchClusterUtilization(),
+                    fetch(`${API_URL}/topology-full`).then(r => r.json()).catch(e => {
+                        console.error('Topology fetch failed:', e);
+                        return { nodes: [] };
+                    })
+                ]);
+                
+                console.log('Health data:', healthData);
+                console.log('Topology data:', topoData);
+                console.log('Utilization data:', utilizationData);
+                
+                clusterData = healthData;
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+                renderMetrics(healthData);
+                
+                // Render with topology data if available
+                if (topoData && ((topoData.gpus && topoData.gpus.length > 0) || (topoData.nodes && topoData.nodes.length > 0))) {
+                    console.log('Rendering topology-dependent components');
+                    renderTopIssues(topoData);
+                    renderDistributionCharts(topoData);
+                } else {
+                    console.warn('No topology data, skipping dependent renders', topoData);
+                }
+                
+                renderClusterHeatmap(healthData);
+                renderNodeGrid(healthData);
+                renderCharts(utilizationData);
+                renderGPUTable(healthData);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('errorMessage').textContent = 
+                    error.message + '. Ensure the Flask server is running on http://localhost:5000';
+            }
+        }
+        
+        // Initialize
+        init();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(init, 30000);
+    </script>
+</body>
+</html>

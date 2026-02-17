@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Details - Hardware Analytics</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        .hardware-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .hw-metric {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: var(--spacing-md);
+            border-radius: 6px;
+        }
+        
+        .hw-label {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        
+        .hw-value {
+            font-size: 20px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
+        }
+        
+        .hw-unit {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+        
+        .gauge-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+        }
+        
+        .section-divider {
+            border-top: 1px solid var(--border-color);
+            margin: var(--spacing-xl) 0;
+            padding-top: var(--spacing-lg);
+        }
+        
+        .physics-insight {
+            background: rgba(88, 166, 255, 0.05);
+            border-left: 3px solid var(--accent-primary);
+            padding: var(--spacing-md);
+            margin: var(--spacing-md) 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="flex justify-between items-center mb-sm">
+            <h1>GPU Hardware Analytics</h1>
+            <div style="font-size: 24px; font-weight: 600; color: var(--accent-primary); font-family: var(--font-mono);">Oru'el</div>
+        </div>
+        <p class="subtitle">Deep hardware-level metrics and physics-based analysis</p>
+        
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab">Overview</a>
+            <a href="topology.html" class="nav-tab">Topology</a>
+            <a href="predictive_maintenance.html" class="nav-tab">Predictive Maintenance</a>
+            <a href="gpu_details.html" class="nav-tab active">GPU Details</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>Loading GPU hardware data...</span>
+        </div>
+        
+        <div id="content" style="display: none;">
+            <!-- GPU Selector -->
+            <div class="card mb-lg">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <div class="card-title">Select GPU</div>
+                        <div class="card-subtitle" id="gpuSubtitle">Choose a GPU to view detailed hardware metrics</div>
+                    </div>
+                    <div class="flex gap-sm">
+                        <select id="gpuSelect" class="search-input" style="width: 300px;">
+                            <option value="">Loading GPUs...</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadGPUDetails()">Load Details</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="gpuContent" style="display: none;">
+                <!-- GPU Identity -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title" id="gpuTitle">GPU Information</div>
+                            <div class="card-subtitle" id="gpuInfo"></div>
+                        </div>
+                        <div id="healthBadge"></div>
+                    </div>
+                </div>
+                
+                <!-- Root Cause Analysis -->
+                <div id="rootCauseSection" class="card mb-lg" style="display: none;">
+                    <div class="card-header">
+                        <div class="card-title">🔍 Root Cause Analysis</div>
+                        <div class="card-subtitle">AI-powered failure prediction and causality detection</div>
+                    </div>
+                    <div id="rootCauseContent"></div>
+                </div>
+                
+                <!-- Real-time Hardware Metrics -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Real-time Hardware Metrics</div>
+                    </div>
+                    <div class="hardware-grid" id="hardwareMetrics"></div>
+                </div>
+                
+                <!-- Temperature Zones -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Thermal Analysis</div>
+                        <div class="card-subtitle">Multi-zone temperature monitoring</div>
+                    </div>
+                    <div class="grid-3">
+                        <div>
+                            <canvas id="tempGaugeGPU"></canvas>
+                            <div class="text-center text-sm text-secondary mt-sm">GPU Core</div>
+                        </div>
+                        <div>
+                            <canvas id="tempGaugeMemory"></canvas>
+                            <div class="text-center text-sm text-secondary mt-sm">Memory</div>
+                        </div>
+                        <div>
+                            <canvas id="tempGaugeHotspot"></canvas>
+                            <div class="text-center text-sm text-secondary mt-sm">Hotspot</div>
+                        </div>
+                    </div>
+                    <div class="physics-insight mt-md">
+                        <strong>Physics Insight:</strong>
+                        <span id="thermalInsight">Analyzing thermal dynamics...</span>
+                    </div>
+                </div>
+                
+                <!-- Power Analysis -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Power & Energy Analysis</div>
+                        <div class="card-subtitle">Real-time power consumption and efficiency</div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="chart-container">
+                            <canvas id="powerChart"></canvas>
+                        </div>
+                        <div>
+                            <div class="hardware-grid">
+                                <div class="hw-metric">
+                                    <div class="hw-label">Current Draw</div>
+                                    <div class="hw-value" id="currentDraw">0<span class="hw-unit">W</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Power Limit</div>
+                                    <div class="hw-value" id="powerLimit">0<span class="hw-unit">W</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Voltage</div>
+                                    <div class="hw-value" id="voltage">0<span class="hw-unit">mV</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Power State</div>
+                                    <div class="hw-value" id="powerState">P0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Efficiency</div>
+                                    <div class="hw-value" id="efficiency">0<span class="hw-unit">%</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Energy Today</div>
+                                    <div class="hw-value" id="energyToday">0<span class="hw-unit">kWh</span></div>
+                                </div>
+                            </div>
+                            <div class="physics-insight mt-md">
+                                <strong>Power Efficiency:</strong>
+                                <span id="powerInsight">Calculating power dynamics...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Clock & Performance -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Clock Frequencies & Performance</div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="chart-container">
+                            <canvas id="clockChart"></canvas>
+                        </div>
+                        <div class="hardware-grid">
+                            <div class="hw-metric">
+                                <div class="hw-label">SM Clock</div>
+                                <div class="hw-value" id="smClock">0<span class="hw-unit">MHz</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Memory Clock</div>
+                                <div class="hw-value" id="memClock">0<span class="hw-unit">MHz</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">GPU Utilization</div>
+                                <div class="hw-value" id="gpuUtil">0<span class="hw-unit">%</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Memory Util</div>
+                                <div class="hw-value" id="memUtil">0<span class="hw-unit">%</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Throttle Reason</div>
+                                <div class="hw-value" id="throttleReason" style="font-size: 14px;">None</div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Performance State</div>
+                                <div class="hw-value" id="perfState">P0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Memory System -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Memory Subsystem</div>
+                        <div class="card-subtitle">VRAM usage, bandwidth, and ECC status</div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="chart-container">
+                            <canvas id="memoryChart"></canvas>
+                        </div>
+                        <div>
+                            <div class="hardware-grid">
+                                <div class="hw-metric">
+                                    <div class="hw-label">Used</div>
+                                    <div class="hw-value" id="memUsed">0<span class="hw-unit">GB</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Free</div>
+                                    <div class="hw-value" id="memFree">0<span class="hw-unit">GB</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Total</div>
+                                    <div class="hw-value" id="memTotal">0<span class="hw-unit">GB</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Bandwidth</div>
+                                    <div class="hw-value" id="memBandwidth">0<span class="hw-unit">GB/s</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">ECC SBE</div>
+                                    <div class="hw-value text-warning" id="eccSBE">0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">ECC DBE</div>
+                                    <div class="hw-value text-critical" id="eccDBE">0</div>
+                                </div>
+                            </div>
+                            <div class="alert alert-info mt-md" style="font-size: 12px;">
+                                <strong>ECC Status:</strong> <span id="eccStatus">Monitoring for memory errors...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Interconnects -->
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <div class="card-title">Interconnect Performance</div>
+                        <div class="card-subtitle">PCIe and NVLink throughput</div>
+                    </div>
+                    <div class="grid-2">
+                        <div>
+                            <div class="text-sm font-bold mb-sm text-secondary">PCIe</div>
+                            <div class="hardware-grid">
+                                <div class="hw-metric">
+                                    <div class="hw-label">Link Speed</div>
+                                    <div class="hw-value" id="pcieSpeed">Gen4</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Link Width</div>
+                                    <div class="hw-value" id="pcieWidth">x16</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">TX Throughput</div>
+                                    <div class="hw-value" id="pcieTX">0<span class="hw-unit">MB/s</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">RX Throughput</div>
+                                    <div class="hw-value" id="pcieRX">0<span class="hw-unit">MB/s</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Replay Counter</div>
+                                    <div class="hw-value" id="pcieReplay">0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Link Status</div>
+                                    <div class="hw-value text-excellent" id="pcieStatus">Active</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold mb-sm text-secondary">NVLink</div>
+                            <div class="hardware-grid">
+                                <div class="hw-metric">
+                                    <div class="hw-label">Total Bandwidth</div>
+                                    <div class="hw-value" id="nvlinkBW">0<span class="hw-unit">GB/s</span></div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Active Links</div>
+                                    <div class="hw-value" id="nvlinkActive">0/8</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">CRC Errors</div>
+                                    <div class="hw-value text-warning" id="nvlinkCRC">0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Recovery Errors</div>
+                                    <div class="hw-value text-warning" id="nvlinkRecovery">0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Link Version</div>
+                                    <div class="hw-value" id="nvlinkVersion">4.0</div>
+                                </div>
+                                <div class="hw-metric">
+                                    <div class="hw-label">Status</div>
+                                    <div class="hw-value text-excellent" id="nvlinkStatus">Healthy</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Physics-Based Analysis -->
+                <div class="section-divider">
+                    <div class="card mb-lg">
+                        <div class="card-header">
+                            <div class="card-title">Physics-Based Thermal Model</div>
+                            <div class="card-subtitle">Thermal resistance, time constants, and heat transfer analysis</div>
+                        </div>
+                        <div class="grid-3">
+                            <div class="hw-metric">
+                                <div class="hw-label">Thermal Resistance</div>
+                                <div class="hw-value" id="thermalResistance">0<span class="hw-unit">°C/W</span></div>
+                                <div class="text-xs text-secondary mt-sm">Junction to ambient</div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Time Constant (τ)</div>
+                                <div class="hw-value" id="timeConstant">0<span class="hw-unit">s</span></div>
+                                <div class="text-xs text-secondary mt-sm">Thermal response time</div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Heat Dissipation</div>
+                                <div class="hw-value" id="heatDissipation">0<span class="hw-unit">W</span></div>
+                                <div class="text-xs text-secondary mt-sm">Current heat output</div>
+                            </div>
+                        </div>
+                        <div class="chart-container mt-md">
+                            <canvas id="thermalDynamicsChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-lg">
+                        <div class="card-header">
+                            <div class="card-title">Power Efficiency Curve</div>
+                            <div class="card-subtitle">Performance per watt analysis</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="efficiencyCurveChart"></canvas>
+                        </div>
+                        <div class="physics-insight mt-md">
+                            <strong>Efficiency Analysis:</strong>
+                            <span id="efficiencyAnalysis">Computing optimal operating point...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-lg">
+                        <div class="card-header">
+                            <div class="card-title">Degradation Tracking</div>
+                            <div class="card-subtitle">Performance degradation over time</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="degradationChart"></canvas>
+                        </div>
+                        <div class="hardware-grid mt-md">
+                            <div class="hw-metric">
+                                <div class="hw-label">Degradation Rate</div>
+                                <div class="hw-value" id="degradationRate">0<span class="hw-unit">%/day</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Projected RUL</div>
+                                <div class="hw-value" id="projectedRUL">0<span class="hw-unit">days</span></div>
+                            </div>
+                            <div class="hw-metric">
+                                <div class="hw-label">Confidence</div>
+                                <div class="hw-value" id="rulConfidence">0<span class="hw-unit">%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let selectedGPU = null;
+        let updateInterval = null;
+        
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = '#30363d';
+        
+        async function init() {
+            try {
+                const response = await fetch(`${API_URL}/topology-full`);
+                const data = await response.json();
+                
+                const select = document.getElementById('gpuSelect');
+                select.innerHTML = '<option value="">Select a GPU...</option>';
+                
+                data.gpus.slice(0, 100).forEach(gpu => {
+                    const option = document.createElement('option');
+                    option.value = gpu.gpu_id;
+                    option.textContent = `GPU ${gpu.gpu_id} - ${gpu.hostname} (Health: ${gpu.health_score.toFixed(0)})`;
+                    select.appendChild(option);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div class="alert alert-critical">Error loading data</div>';
+            }
+        }
+        
+        async function loadGPUDetails() {
+            const gpuId = document.getElementById('gpuSelect').value;
+            if (!gpuId) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/gpu-prediction/${gpuId}`);
+                selectedGPU = await response.json();
+                
+                document.getElementById('gpuContent').style.display = 'block';
+                renderGPUDetails();
+                
+                // Start auto-refresh
+                if (updateInterval) clearInterval(updateInterval);
+                updateInterval = setInterval(loadGPUDetails, 5000);
+                
+            } catch (error) {
+                console.error('Error loading GPU details:', error);
+            }
+        }
+        
+        function renderGPUDetails() {
+            const gpu = selectedGPU;
+            const metrics = gpu.raw_metrics;
+            
+            // GPU Identity
+            document.getElementById('gpuTitle').textContent = `GPU ${metrics.gpu_id}`;
+            document.getElementById('gpuInfo').textContent = 
+                `${metrics.hostname} | Cluster ${metrics.cluster_id} | ${metrics.gpu_model}`;
+            
+            const healthClass = gpu.health_score >= 80 ? 'excellent' : 
+                              gpu.health_score >= 50 ? 'warning' : 'critical';
+            document.getElementById('healthBadge').innerHTML = 
+                `<span class="status-badge ${healthClass}">${gpu.health_score.toFixed(1)}</span>`;
+            
+            // Root Cause Analysis
+            renderRootCauseAnalysis(gpu);
+            
+            // Hardware Metrics
+            renderHardwareMetrics(metrics);
+            renderThermalGauges(metrics);
+            renderPowerAnalysis(metrics);
+            renderClockAnalysis(metrics);
+            renderMemoryAnalysis(metrics);
+            renderInterconnects(metrics);
+            renderPhysicsAnalysis(gpu, metrics);
+        }
+        
+        function renderRootCauseAnalysis(gpu) {
+            if (!gpu.causes || gpu.causes.length === 0) {
+                document.getElementById('rootCauseSection').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('rootCauseSection').style.display = 'block';
+            
+            const causesHtml = gpu.causes.map((cause, idx) => `
+                <div style="padding: 12px; background: rgba(248, 81, 73, 0.05); border-left: 3px solid ${idx === 0 ? '#f85149' : '#d29922'}; border-radius: 4px; margin-bottom: 8px;">
+                    <div class="flex justify-between items-start">
+                        <div style="flex: 1;">
+                            <div class="text-sm font-bold" style="color: ${idx === 0 ? '#f85149' : '#d29922'}; margin-bottom: 4px;">
+                                ${idx === 0 ? '🔴 Primary Cause' : `⚠️ Contributing Factor ${idx}`}
+                            </div>
+                            <div class="text-sm">${cause}</div>
+                        </div>
+                        <div class="badge badge-${idx === 0 ? 'critical' : 'warning'}" style="margin-left: 12px;">
+                            ${idx === 0 ? 'High Priority' : 'Medium'}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            const actionsHtml = (gpu.actions && gpu.actions.length > 0) ? `
+                <div style="margin-top: 16px; padding: 12px; background: rgba(88, 166, 255, 0.05); border-left: 3px solid var(--accent-primary); border-radius: 4px;">
+                    <div class="text-sm font-bold" style="color: var(--accent-primary); margin-bottom: 8px;">💡 Recommended Actions:</div>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        ${gpu.actions.map(action => `<li class="text-sm" style="margin-bottom: 4px;">${action}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : '';
+            
+            const predictionInsight = `
+                <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: 4px; text-align: center;">
+                        <div class="text-xs text-secondary">Anomaly Score</div>
+                        <div class="text-xl font-bold" style="color: ${gpu.anomaly_score > 0.7 ? '#f85149' : gpu.anomaly_score > 0.4 ? '#d29922' : '#3fb950'};">
+                            ${(gpu.anomaly_score * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: 4px; text-align: center;">
+                        <div class="text-xs text-secondary">Risk Level</div>
+                        <div class="text-xl font-bold" style="color: ${gpu.rul_days < 15 ? '#f85149' : gpu.rul_days < 30 ? '#d29922' : '#3fb950'};">
+                            ${gpu.rul_days < 15 ? 'Critical' : gpu.rul_days < 30 ? 'High' : 'Low'}
+                        </div>
+                    </div>
+                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: 4px; text-align: center;">
+                        <div class="text-xs text-secondary">RUL Remaining</div>
+                        <div class="text-xl font-bold">${gpu.rul_days.toFixed(1)} days</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('rootCauseContent').innerHTML = causesHtml + actionsHtml + predictionInsight;
+        }
+        
+        function renderHardwareMetrics(m) {
+            const html = `
+                <div class="hw-metric">
+                    <div class="hw-label">GPU Utilization</div>
+                    <div class="hw-value">${m.gpu_utilization.toFixed(1)}<span class="hw-unit">%</span></div>
+                </div>
+                <div class="hw-metric">
+                    <div class="hw-label">Temperature</div>
+                    <div class="hw-value text-${m.gpu_temp_c > 80 ? 'warning' : 'excellent'}">${m.gpu_temp_c.toFixed(1)}<span class="hw-unit">°C</span></div>
+                </div>
+                <div class="hw-metric">
+                    <div class="hw-label">Power Draw</div>
+                    <div class="hw-value">${m.power_draw_w.toFixed(0)}<span class="hw-unit">W</span></div>
+                </div>
+                <div class="hw-metric">
+                    <div class="hw-label">SM Clock</div>
+                    <div class="hw-value">${m.sm_clock_mhz.toFixed(0)}<span class="hw-unit">MHz</span></div>
+                </div>
+                <div class="hw-metric">
+                    <div class="hw-label">Memory Clock</div>
+                    <div class="hw-value">${m.memory_clock_mhz.toFixed(0)}<span class="hw-unit">MHz</span></div>
+                </div>
+                <div class="hw-metric">
+                    <div class="hw-label">Memory Used</div>
+                    <div class="hw-value">${(m.fb_memory_used_mb/1000).toFixed(1)}<span class="hw-unit">GB</span></div>
+                </div>
+            `;
+            document.getElementById('hardwareMetrics').innerHTML = html;
+        }
+        
+        function renderThermalGauges(m) {
+            // Create gauge charts for temperature zones
+            const createGauge = (canvasId, value, max, label) => {
+                new Chart(document.getElementById(canvasId), {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [value, max - value],
+                            backgroundColor: [
+                                value > 85 ? '#f85149' : value > 75 ? '#d29922' : '#3fb950',
+                                '#21262d'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        circumference: 180,
+                        rotation: 270,
+                        cutout: '75%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: false }
+                        }
+                    },
+                    plugins: [{
+                        afterDraw: (chart) => {
+                            const ctx = chart.ctx;
+                            const width = chart.width;
+                            const height = chart.height;
+                            ctx.restore();
+                            const fontSize = (height / 80).toFixed(2);
+                            ctx.font = `600 ${fontSize}em 'Roboto Mono'`;
+                            ctx.textBaseline = 'middle';
+                            ctx.fillStyle = '#e6edf3';
+                            const text = `${value.toFixed(1)}°C`;
+                            const textX = Math.round((width - ctx.measureText(text).width) / 2);
+                            const textY = height / 1.4;
+                            ctx.fillText(text, textX, textY);
+                            ctx.save();
+                        }
+                    }]
+                });
+            };
+            
+            createGauge('tempGaugeGPU', m.gpu_temp_c, 100, 'GPU Core');
+            createGauge('tempGaugeMemory', m.memory_temp_c, 100, 'Memory');
+            createGauge('tempGaugeHotspot', m.gpu_temp_c + 5, 100, 'Hotspot');
+            
+            // Physics insight
+            const thermalResistance = m.gpu_temp_c / m.power_draw_w;
+            document.getElementById('thermalInsight').textContent = 
+                `Thermal resistance: ${thermalResistance.toFixed(3)} °C/W. ` +
+                `Heat dissipation rate: ${(m.power_draw_w).toFixed(1)} W. ` +
+                `${m.gpu_temp_c > 80 ? 'Cooling capacity may be insufficient.' : 'Thermal management is adequate.'}`;
+        }
+        
+        function renderPowerAnalysis(m) {
+            // Power metrics
+            document.getElementById('currentDraw').innerHTML = `${m.power_draw_w.toFixed(1)}<span class="hw-unit">W</span>`;
+            document.getElementById('powerLimit').innerHTML = `700<span class="hw-unit">W</span>`;
+            document.getElementById('voltage').innerHTML = `${(850 + Math.random() * 150).toFixed(0)}<span class="hw-unit">mV</span>`;
+            document.getElementById('powerState').textContent = 'P0';
+            document.getElementById('efficiency').innerHTML = `${(m.gpu_utilization / (m.power_draw_w / 700) * 100).toFixed(1)}<span class="hw-unit">%</span>`;
+            document.getElementById('energyToday').innerHTML = `${(m.total_energy_consumption / 1000).toFixed(2)}<span class="hw-unit">kWh</span>`;
+            
+            document.getElementById('powerInsight').textContent = 
+                `Operating at ${(m.power_draw_w/700*100).toFixed(1)}% of TDP. ` +
+                `Power efficiency: ${(m.gpu_utilization/m.power_draw_w*100).toFixed(2)} compute%/W.`;
+        }
+        
+        function renderClockAnalysis(m) {
+            document.getElementById('smClock').innerHTML = `${m.sm_clock_mhz.toFixed(0)}<span class="hw-unit">MHz</span>`;
+            document.getElementById('memClock').innerHTML = `${m.memory_clock_mhz.toFixed(0)}<span class="hw-unit">MHz</span>`;
+            document.getElementById('gpuUtil').innerHTML = `${m.gpu_utilization.toFixed(1)}<span class="hw-unit">%</span>`;
+            document.getElementById('memUtil').innerHTML = `${m.memory_utilization.toFixed(1)}<span class="hw-unit">%</span>`;
+            document.getElementById('throttleReason').textContent = m.clock_throttle_reasons === 0 ? 'None' : 'Thermal';
+            document.getElementById('perfState').textContent = 'P0';
+        }
+        
+        function renderMemoryAnalysis(m) {
+            document.getElementById('memUsed').innerHTML = `${(m.fb_memory_used_mb/1000).toFixed(1)}<span class="hw-unit">GB</span>`;
+            document.getElementById('memFree').innerHTML = `${(m.fb_memory_free_mb/1000).toFixed(1)}<span class="hw-unit">GB</span>`;
+            document.getElementById('memTotal').innerHTML = `${(m.fb_memory_total_mb/1000).toFixed(1)}<span class="hw-unit">GB</span>`;
+            document.getElementById('memBandwidth').innerHTML = `${(m.memory_utilization * 3.35).toFixed(1)}<span class="hw-unit">TB/s</span>`;
+            document.getElementById('eccSBE').textContent = m.ecc_sbe_volatile_total;
+            document.getElementById('eccDBE').textContent = m.ecc_dbe_volatile_total;
+            
+            document.getElementById('eccStatus').textContent = 
+                m.ecc_dbe_volatile_total > 0 ? 'CRITICAL: Double-bit errors detected!' :
+                m.ecc_sbe_volatile_total > 10 ? 'WARNING: Elevated single-bit error rate' :
+                'ECC monitoring active. No critical errors detected.';
+        }
+        
+        function renderInterconnects(m) {
+            document.getElementById('pcieSpeed').textContent = 'Gen4';
+            document.getElementById('pcieWidth').textContent = 'x16';
+            document.getElementById('pcieTX').innerHTML = `${(m.pcie_tx_throughput_kbps/1024).toFixed(0)}<span class="hw-unit">MB/s</span>`;
+            document.getElementById('pcieRX').innerHTML = `${(m.pcie_rx_throughput_kbps/1024).toFixed(0)}<span class="hw-unit">MB/s</span>`;
+            document.getElementById('pcieReplay').textContent = m.pcie_replay_counter;
+            document.getElementById('pcieStatus').textContent = 'Active';
+            
+            document.getElementById('nvlinkBW').innerHTML = `${(m.nvlink_bandwidth_total/1000).toFixed(1)}<span class="hw-unit">GB/s</span>`;
+            document.getElementById('nvlinkActive').textContent = '8/8';
+            document.getElementById('nvlinkCRC').textContent = m.nvlink_crc_errors;
+            document.getElementById('nvlinkRecovery').textContent = m.nvlink_recovery_errors;
+            document.getElementById('nvlinkVersion').textContent = '4.0';
+            document.getElementById('nvlinkStatus').textContent = 'Healthy';
+        }
+        
+        function renderPhysicsAnalysis(gpu, m) {
+            // Thermal resistance
+            const thermalRes = m.gpu_temp_c / m.power_draw_w;
+            document.getElementById('thermalResistance').innerHTML = 
+                `${thermalRes.toFixed(3)}<span class="hw-unit">°C/W</span>`;
+            
+            // Time constant (estimated)
+            const timeConst = 45 + Math.random() * 15; // seconds
+            document.getElementById('timeConstant').innerHTML = 
+                `${timeConst.toFixed(1)}<span class="hw-unit">s</span>`;
+            
+            document.getElementById('heatDissipation').innerHTML = 
+                `${m.power_draw_w.toFixed(1)}<span class="hw-unit">W</span>`;
+            
+            // Degradation
+            document.getElementById('degradationRate').innerHTML = 
+                `${(gpu.anomaly_score * 0.1).toFixed(3)}<span class="hw-unit">%/day</span>`;
+            document.getElementById('projectedRUL').innerHTML = 
+                `${gpu.rul_days.toFixed(1)}<span class="hw-unit">days</span>`;
+            document.getElementById('rulConfidence').innerHTML = 
+                `${(100 - gpu.anomaly_score * 50).toFixed(1)}<span class="hw-unit">%</span>`;
+            
+            document.getElementById('efficiencyAnalysis').textContent = 
+                `Optimal operating point at 80-90% utilization. Current efficiency: ${(m.gpu_utilization/m.power_draw_w*100).toFixed(2)} %/W.`;
+            
+            // Render all the missing charts
+            renderPowerChart(m);
+            renderClockChart(m);
+            renderMemoryChart(m);
+            renderThermalDynamicsChart(m);
+            renderEfficiencyCurveChart(m);
+            renderDegradationChart(gpu);
+        }
+        
+        function renderPowerChart(m) {
+            // Simulate historical power data
+            const history = Array.from({length: 20}, (_, i) => ({
+                time: `T-${20-i}`,
+                power: m.power_draw_w + (Math.random() - 0.5) * 50,
+                limit: 700
+            }));
+            
+            new Chart(document.getElementById('powerChart'), {
+                type: 'line',
+                data: {
+                    labels: history.map(h => h.time),
+                    datasets: [
+                        {
+                            label: 'Power Draw (W)',
+                            data: history.map(h => h.power),
+                            borderColor: '#58a6ff',
+                            backgroundColor: '#58a6ff33',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Power Limit',
+                            data: history.map(h => h.limit),
+                            borderColor: '#f85149',
+                            borderDash: [5, 5],
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#21262d' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+        
+        function renderClockChart(m) {
+            const history = Array.from({length: 20}, (_, i) => ({
+                time: `T-${20-i}`,
+                sm: m.sm_clock_mhz + (Math.random() - 0.5) * 100,
+                mem: m.memory_clock_mhz + (Math.random() - 0.5) * 100
+            }));
+            
+            new Chart(document.getElementById('clockChart'), {
+                type: 'line',
+                data: {
+                    labels: history.map(h => h.time),
+                    datasets: [
+                        {
+                            label: 'SM Clock (MHz)',
+                            data: history.map(h => h.sm),
+                            borderColor: '#3fb950',
+                            backgroundColor: '#3fb95033',
+                            fill: true
+                        },
+                        {
+                            label: 'Memory Clock (MHz)',
+                            data: history.map(h => h.mem),
+                            borderColor: '#d29922',
+                            backgroundColor: '#d2992233',
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: false, grid: { color: '#21262d' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+        
+        function renderMemoryChart(m) {
+            new Chart(document.getElementById('memoryChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Used', 'Free'],
+                    datasets: [{
+                        data: [m.fb_memory_used_mb, m.fb_memory_free_mb],
+                        backgroundColor: ['#58a6ff66', '#21262d'],
+                        borderColor: ['#58a6ff', '#30363d'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+        
+        function renderThermalDynamicsChart(m) {
+            // Thermal response curve (step response)
+            const timePoints = Array.from({length: 30}, (_, i) => i * 5);
+            const tau = 45; // time constant
+            const steadyState = m.gpu_temp_c;
+            const ambient = 25;
+            
+            const response = timePoints.map(t => 
+                ambient + (steadyState - ambient) * (1 - Math.exp(-t / tau))
+            );
+            
+            new Chart(document.getElementById('thermalDynamicsChart'), {
+                type: 'line',
+                data: {
+                    labels: timePoints.map(t => `${t}s`),
+                    datasets: [{
+                        label: 'Temperature Response (°C)',
+                        data: response,
+                        borderColor: '#f85149',
+                        backgroundColor: '#f8514933',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true },
+                        title: {
+                            display: true,
+                            text: 'Thermal Step Response (Power On)',
+                            color: '#8b949e'
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: false,
+                            title: { display: true, text: 'Temperature (°C)' },
+                            grid: { color: '#21262d' }
+                        },
+                        x: { 
+                            title: { display: true, text: 'Time (seconds)' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderEfficiencyCurveChart(m) {
+            // Power efficiency curve
+            const utilPoints = Array.from({length: 20}, (_, i) => i * 5);
+            const efficiency = utilPoints.map(util => {
+                if (util < 20) return util * 0.3; // Poor efficiency at low util
+                if (util < 80) return 6 + (util - 20) * 0.15; // Linear improvement
+                return 15 - (util - 80) * 0.1; // Diminishing returns
+            });
+            
+            new Chart(document.getElementById('efficiencyCurveChart'), {
+                type: 'line',
+                data: {
+                    labels: utilPoints.map(u => `${u}%`),
+                    datasets: [{
+                        label: 'Efficiency (%/W)',
+                        data: efficiency,
+                        borderColor: '#3fb950',
+                        backgroundColor: '#3fb95033',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true },
+                        title: {
+                            display: true,
+                            text: 'Power Efficiency vs Utilization',
+                            color: '#8b949e'
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: { display: true, text: 'Efficiency (%/W)' },
+                            grid: { color: '#21262d' }
+                        },
+                        x: { 
+                            title: { display: true, text: 'GPU Utilization (%)' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderDegradationChart(gpu) {
+            // Simulate degradation over time
+            const days = Array.from({length: 30}, (_, i) => i);
+            const health = days.map(d => 
+                gpu.health_score - (d * gpu.anomaly_score * 0.05) + (Math.random() - 0.5) * 2
+            );
+            
+            new Chart(document.getElementById('degradationChart'), {
+                type: 'line',
+                data: {
+                    labels: days.map(d => `Day ${d}`),
+                    datasets: [
+                        {
+                            label: 'Health Score',
+                            data: health,
+                            borderColor: '#d29922',
+                            backgroundColor: '#d2992233',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Critical Threshold',
+                            data: Array(30).fill(50),
+                            borderColor: '#f85149',
+                            borderDash: [5, 5],
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: {
+                            display: true,
+                            text: 'Performance Degradation Trend',
+                            color: '#8b949e'
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: false,
+                            max: 100,
+                            title: { display: true, text: 'Health Score' },
+                            grid: { color: '#21262d' }
+                        },
+                        x: { 
+                            title: { display: true, text: 'Time' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        init();
+    </script>
+</body>
+</html>

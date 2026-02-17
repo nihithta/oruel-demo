@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster Health Monitoring</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-label {
+            color: #999;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-value.healthy { color: #10b981; }
+        .stat-value.warning { color: #f59e0b; }
+        .stat-value.critical { color: #ef4444; }
+        
+        .nodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .node-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .node-header {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .gpu-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .gpu-box {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .gpu-box:hover {
+            transform: scale(1.05);
+            border-color: #667eea;
+        }
+        
+        .gpu-box.healthy {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .gpu-box.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .gpu-box.critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .gpu-id {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+        
+        .gpu-score {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .gpu-status {
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        
+        .gpu-issues {
+            margin-top: 10px;
+            font-size: 0.85em;
+            text-align: left;
+            padding: 10px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 5px;
+        }
+        
+        .issue-item {
+            margin: 3px 0;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        canvas {
+            max-height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GPU Cluster Health Monitor</h1>
+            <p class="subtitle">Real-time analysis of cluster performance and health metrics</p>
+            <div style="margin-top: 15px; display: flex; gap: 15px; flex-wrap: wrap;">
+                <a href="topology.html" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; transition: transform 0.3s;">
+                    🌐 Topology Visualization
+                </a>
+                <a href="predictive_maintenance.html" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; transition: transform 0.3s;">
+                    ⚠️ Predictive Maintenance
+                </a>
+                <a href="advanced.html" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; transition: transform 0.3s;">
+                    📊 Advanced Analytics
+                </a>
+                <a href="demo.html" style="display: inline-block; padding: 12px 24px; background: #000000; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: 2px solid #ffffff; transition: all 0.3s;">
+                    🎮 Launch Live Demo
+                </a>
+            </div>
+        </header>
+        
+        <div id="loading" class="loading">Loading cluster data...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="stats" class="stats-grid" style="display: none;"></div>
+        <div id="nodes" class="nodes-grid" style="display: none;"></div>
+        <div id="charts" style="display: none;"></div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        
+        async function fetchClusterHealth() {
+            try {
+                const response = await fetch(`${API_URL}/cluster-health`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching cluster health:', error);
+                throw error;
+            }
+        }
+        
+        async function fetchClusterUtilization() {
+            try {
+                const response = await fetch(`${API_URL}/cluster-utilization`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching utilization:', error);
+                throw error;
+            }
+        }
+        
+        function renderStats(data) {
+            const statsDiv = document.getElementById('stats');
+            const totalGPUs = data.total_gpus;
+            const healthyPercent = ((data.healthy_gpus / totalGPUs) * 100).toFixed(1);
+            
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Nodes</div>
+                    <div class="stat-value">${data.total_nodes}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total GPUs</div>
+                    <div class="stat-value">${data.total_gpus}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Healthy GPUs</div>
+                    <div class="stat-value healthy">${data.healthy_gpus}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Warning GPUs</div>
+                    <div class="stat-value warning">${data.warning_gpus}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Critical GPUs</div>
+                    <div class="stat-value critical">${data.critical_gpus}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Cluster Health</div>
+                    <div class="stat-value ${healthyPercent > 80 ? 'healthy' : healthyPercent > 50 ? 'warning' : 'critical'}">${healthyPercent}%</div>
+                </div>
+            `;
+            statsDiv.style.display = 'grid';
+        }
+        
+        function renderNodes(data) {
+            const nodesDiv = document.getElementById('nodes');
+            let html = '';
+            
+            data.nodes.forEach(node => {
+                html += `
+                    <div class="node-card">
+                        <div class="node-header">${node.name}</div>
+                        <div class="gpu-grid">
+                            ${node.gpus.map(gpu => `
+                                <div class="gpu-box ${gpu.status.toLowerCase()}" 
+                                     onclick="toggleGPUDetails('gpu-${node.name}-${gpu.id}')">
+                                    <div class="gpu-id">GPU ${gpu.id}</div>
+                                    <div class="gpu-score">${gpu.health_score}</div>
+                                    <div class="gpu-status">${gpu.status}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${node.gpus.map(gpu => `
+                            <div id="gpu-${node.name}-${gpu.id}" class="gpu-issues" style="display: none;">
+                                <strong>GPU ${gpu.id} Issues:</strong>
+                                ${gpu.issues.length > 0 ? 
+                                    gpu.issues.map(issue => `<div class="issue-item">${issue}</div>`).join('') :
+                                    '<div class="issue-item">No issues detected</div>'
+                                }
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            });
+            
+            nodesDiv.innerHTML = html;
+            nodesDiv.style.display = 'grid';
+        }
+        
+        function toggleGPUDetails(id) {
+            const element = document.getElementById(id);
+            element.style.display = element.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function renderCharts(utilizationData) {
+            const chartsDiv = document.getElementById('charts');
+            
+            // Prepare data for utilization chart
+            const labels = utilizationData.nodes.map(n => n.name);
+            const avgUtils = utilizationData.nodes.map(n => 
+                n.gpus.reduce((sum, gpu) => sum + gpu.avg_utilization, 0) / n.gpus.length
+            );
+            const maxTemps = utilizationData.nodes.map(n => 
+                Math.max(...n.gpus.map(gpu => gpu.max_temp))
+            );
+            
+            chartsDiv.innerHTML = `
+                <div class="chart-container">
+                    <div class="chart-title">Average GPU Utilization by Node</div>
+                    <canvas id="utilizationChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Maximum GPU Temperature by Node</div>
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+            `;
+            
+            // Utilization chart
+            new Chart(document.getElementById('utilizationChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average GPU Utilization (%)',
+                        data: avgUtils,
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+            
+            // Temperature chart
+            new Chart(document.getElementById('temperatureChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Max GPU Temperature (°C)',
+                        data: maxTemps,
+                        backgroundColor: maxTemps.map(temp => 
+                            temp > 85 ? 'rgba(239, 68, 68, 0.6)' : 
+                            temp > 80 ? 'rgba(245, 158, 11, 0.6)' : 
+                            'rgba(16, 185, 129, 0.6)'
+                        ),
+                        borderColor: maxTemps.map(temp => 
+                            temp > 85 ? 'rgba(239, 68, 68, 1)' : 
+                            temp > 80 ? 'rgba(245, 158, 11, 1)' : 
+                            'rgba(16, 185, 129, 1)'
+                        ),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            chartsDiv.style.display = 'block';
+        }
+        
+        async function init() {
+            try {
+                const [healthData, utilizationData] = await Promise.all([
+                    fetchClusterHealth(),
+                    fetchClusterUtilization()
+                ]);
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                renderStats(healthData);
+                renderNodes(healthData);
+                renderCharts(utilizationData);
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 
+                    'Error loading cluster data: ' + error.message + 
+                    '. Make sure the Flask server is running on http://localhost:5000';
+            }
+        }
+        
+        // Initialize on page load
+        init();
+        
+        // Refresh every 30 seconds
+        setInterval(init, 30000);
+    </script>
+</body>
+</html>

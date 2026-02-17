@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Analytics - GPU Cluster</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.8em;
+            margin-bottom: 10px;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .nav-tab {
+            padding: 12px 24px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .nav-tab:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .nav-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .section {
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .insight-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        
+        .insight-header {
+            font-size: 1.4em;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .insight-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .insight-value.critical { color: #ef4444; }
+        .insight-value.warning { color: #f59e0b; }
+        .insight-value.good { color: #10b981; }
+        .insight-value.neutral { color: #667eea; }
+        
+        .insight-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .gpu-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .detail-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        
+        .detail-header {
+            font-size: 1.5em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-name {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .metric-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .trend-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .trend-increasing { background: #fee2e2; color: #991b1b; }
+        .trend-decreasing { background: #d1fae5; color: #065f46; }
+        .trend-stable { background: #e0e7ff; color: #3730a3; }
+        
+        .warning-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+        
+        .warning-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .gpu-selector {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .gpu-btn {
+            padding: 15px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .gpu-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .gpu-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .node-selector {
+            margin: 20px 0;
+        }
+        
+        .node-btn {
+            padding: 12px 24px;
+            margin: 5px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .node-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .node-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .stats-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+        
+        .badge-excellent { background: #d1fae5; color: #065f46; }
+        .badge-good { background: #dbeafe; color: #1e40af; }
+        .badge-moderate { background: #fef3c7; color: #92400e; }
+        .badge-poor { background: #fee2e2; color: #991b1b; }
+        
+        canvas {
+            max-height: 400px;
+        }
+        
+        .correlation-matrix {
+            overflow-x: auto;
+        }
+        
+        .correlation-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .correlation-table th,
+        .correlation-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .correlation-table th {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .corr-high { background: #dcfce7; }
+        .corr-medium { background: #fef3c7; }
+        .corr-low { background: #fee2e2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Advanced Analytics Dashboard</h1>
+            <p class="subtitle">Deep Temporal, Physics, and Statistical Analysis</p>
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="switchTab('overview')">Cluster Overview</button>
+                <button class="nav-tab" onclick="switchTab('temporal')">Temporal Analysis</button>
+                <button class="nav-tab" onclick="switchTab('physics')">Physics Models</button>
+                <button class="nav-tab" onclick="switchTab('correlations')">Correlations</button>
+                <button class="nav-tab" onclick="switchTab('predictive')">Predictive Analytics</button>
+                <button class="nav-tab" onclick="switchTab('cluster')">Cluster Analysis</button>
+            </div>
+        </header>
+        
+        <div id="loading" class="loading">Loading advanced analytics...</div>
+        
+        <!-- Overview Section -->
+        <div id="overview-section" class="section active">
+            <div id="cluster-insights" class="insights-grid"></div>
+            <div id="node-summaries" class="gpu-detail-grid"></div>
+        </div>
+        
+        <!-- Temporal Analysis Section -->
+        <div id="temporal-section" class="section">
+            <div class="node-selector" id="temporal-node-selector"></div>
+            <div class="gpu-selector" id="temporal-gpu-selector"></div>
+            <div id="temporal-details" class="gpu-detail-grid"></div>
+            <div id="temporal-charts"></div>
+        </div>
+        
+        <!-- Physics Section -->
+        <div id="physics-section" class="section">
+            <div class="node-selector" id="physics-node-selector"></div>
+            <div class="gpu-selector" id="physics-gpu-selector"></div>
+            <div id="physics-details" class="gpu-detail-grid"></div>
+            <div id="physics-charts"></div>
+        </div>
+        
+        <!-- Correlations Section -->
+        <div id="correlations-section" class="section">
+            <div class="node-selector" id="corr-node-selector"></div>
+            <div id="correlation-content"></div>
+        </div>
+        
+        <!-- Predictive Section -->
+        <div id="predictive-section" class="section">
+            <div class="node-selector" id="pred-node-selector"></div>
+            <div class="gpu-selector" id="pred-gpu-selector"></div>
+            <div id="predictive-details" class="insights-grid"></div>
+            <div id="predictive-charts"></div>
+        </div>
+        
+        <!-- Cluster Analysis Section -->
+        <div id="cluster-section" class="section">
+            <div id="cluster-analysis-content"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let clusterData = null;
+        let nodesData = [];
+        let selectedNode = null;
+        let selectedGPU = 0;
+        
+        function switchTab(tabName) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            
+            // Show selected section
+            document.getElementById(`${tabName}-section`).classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load data if needed
+            if (tabName === 'temporal' && selectedNode) {
+                loadTemporalAnalysis(selectedNode, selectedGPU);
+            } else if (tabName === 'physics' && selectedNode) {
+                loadPhysicsAnalysis(selectedNode, selectedGPU);
+            } else if (tabName === 'correlations' && selectedNode) {
+                loadCorrelations(selectedNode);
+            } else if (tabName === 'predictive' && selectedNode) {
+                loadPredictiveAnalysis(selectedNode, selectedGPU);
+            } else if (tabName === 'cluster') {
+                loadClusterAnalysis();
+            }
+        }
+        
+        async function loadClusterSummary() {
+            const response = await fetch(`${API_URL}/cluster-advanced-summary`);
+            const data = await response.json();
+            clusterData = data;
+            
+            // Store nodes
+            nodesData = await fetch(`${API_URL}/nodes`).then(r => r.json());
+            selectedNode = nodesData.nodes[0];
+            
+            renderClusterInsights(data);
+            renderNodeSummaries(data);
+            setupNodeSelectors();
+        }
+        
+        function renderClusterInsights(data) {
+            const container = document.getElementById('cluster-insights');
+            const insights = data.cluster_insights;
+            
+            container.innerHTML = `
+                <div class="insight-card">
+                    <div class="insight-header">Total Anomalies Detected</div>
+                    <div class="insight-value ${insights.total_anomalies > 50 ? 'critical' : insights.total_anomalies > 20 ? 'warning' : 'good'}">
+                        ${insights.total_anomalies}
+                    </div>
+                    <div class="insight-label">Across all GPUs</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-header">High Risk GPUs</div>
+                    <div class="insight-value ${insights.high_risk_gpus > 5 ? 'critical' : insights.high_risk_gpus > 0 ? 'warning' : 'good'}">
+                        ${insights.high_risk_gpus}
+                    </div>
+                    <div class="insight-label">Predicted failure risk</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-header">Power Inefficient</div>
+                    <div class="insight-value ${insights.power_inefficient_gpus > 10 ? 'warning' : 'good'}">
+                        ${insights.power_inefficient_gpus}
+                    </div>
+                    <div class="insight-label">Low efficiency scores</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-header">Thermal Issues</div>
+                    <div class="insight-value ${insights.thermal_issues > 5 ? 'critical' : insights.thermal_issues > 0 ? 'warning' : 'good'}">
+                        ${insights.thermal_issues}
+                    </div>
+                    <div class="insight-label">Poor thermal stability</div>
+                </div>
+            `;
+        }
+        
+        function renderNodeSummaries(data) {
+            const container = document.getElementById('node-summaries');
+            let html = '';
+            
+            data.nodes.forEach(node => {
+                const criticalGPUs = node.gpus.filter(g => g.warnings.length > 2).length;
+                const warningGPUs = node.gpus.filter(g => g.warnings.length > 0 && g.warnings.length <= 2).length;
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">${node.name}</div>
+                        <div class="metric-row">
+                            <span class="metric-name">GPUs with Warnings</span>
+                            <span class="metric-value">${warningGPUs}/8</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Critical GPUs</span>
+                            <span class="metric-value">${criticalGPUs}/8</span>
+                        </div>
+                        
+                        <ul class="warning-list">
+                            ${node.gpus.slice(0, 3).map(gpu => 
+                                gpu.warnings.length > 0 ? `
+                                    <li class="warning-item"><strong>GPU ${gpu.gpu_id}:</strong> ${gpu.warnings[0]}</li>
+                                ` : ''
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function setupNodeSelectors() {
+            const selectors = ['temporal', 'physics', 'corr', 'pred'];
+            
+            selectors.forEach(prefix => {
+                const container = document.getElementById(`${prefix}-node-selector`);
+                container.innerHTML = nodesData.nodes.map((node, idx) => `
+                    <button class="node-btn ${idx === 0 ? 'active' : ''}" 
+                            onclick="selectNode('${node}', '${prefix}')">
+                        ${node}
+                    </button>
+                `).join('');
+            });
+            
+            // Setup GPU selectors
+            ['temporal', 'physics', 'pred'].forEach(prefix => {
+                const container = document.getElementById(`${prefix}-gpu-selector`);
+                container.innerHTML = Array.from({length: 8}, (_, i) => `
+                    <button class="gpu-btn ${i === 0 ? 'active' : ''}" 
+                            onclick="selectGPU(${i}, '${prefix}')">
+                        GPU ${i}
+                    </button>
+                `).join('');
+            });
+        }
+        
+        function selectNode(node, prefix) {
+            selectedNode = node;
+            
+            // Update button styles
+            document.querySelectorAll(`#${prefix}-node-selector .node-btn`).forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Reload data
+            if (prefix === 'temporal') {
+                loadTemporalAnalysis(node, selectedGPU);
+            } else if (prefix === 'physics') {
+                loadPhysicsAnalysis(node, selectedGPU);
+            } else if (prefix === 'corr') {
+                loadCorrelations(node);
+            } else if (prefix === 'pred') {
+                loadPredictiveAnalysis(node, selectedGPU);
+            }
+        }
+        
+        function selectGPU(gpuId, prefix) {
+            selectedGPU = gpuId;
+            
+            // Update button styles
+            document.querySelectorAll(`#${prefix}-gpu-selector .gpu-btn`).forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Reload data
+            if (prefix === 'temporal') {
+                loadTemporalAnalysis(selectedNode, gpuId);
+            } else if (prefix === 'physics') {
+                loadPhysicsAnalysis(selectedNode, gpuId);
+            } else if (prefix === 'pred') {
+                loadPredictiveAnalysis(selectedNode, gpuId);
+            }
+        }
+        
+        async function loadTemporalAnalysis(node, gpuId) {
+            const response = await fetch(`${API_URL}/advanced-analytics/${node}/${gpuId}`);
+            const data = await response.json();
+            
+            renderTemporalDetails(data);
+        }
+        
+        function renderTemporalDetails(data) {
+            const container = document.getElementById('temporal-details');
+            const temporal = data.temporal || {};
+            
+            let html = '';
+            
+            // Utilization trends
+            if (temporal.utilization) {
+                const util = temporal.utilization;
+                const trend = util.trend || {};
+                const volatility = util.volatility || {};
+                const periodicity = util.periodicity || {};
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">Utilization Temporal Analysis</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Trend</span>
+                            <span class="trend-indicator trend-${trend.trend || 'stable'}">${trend.trend || 'Unknown'}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Slope</span>
+                            <span class="metric-value">${(trend.slope || 0).toFixed(4)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">R² (Fit Quality)</span>
+                            <span class="metric-value">${(trend.r_squared || 0).toFixed(3)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Acceleration</span>
+                            <span class="metric-value">${(trend.acceleration || 0).toFixed(4)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Volatility (Current)</span>
+                            <span class="metric-value">${(volatility.current || 0).toFixed(2)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Anomalies Detected</span>
+                            <span class="metric-value">${(util.anomalies || []).length}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Has Periodicity</span>
+                            <span class="metric-value">${periodicity.has_periodicity ? 'Yes' : 'No'}</span>
+                        </div>
+                        ${periodicity.has_periodicity ? `
+                        <div class="metric-row">
+                            <span class="metric-name">Dominant Period</span>
+                            <span class="metric-value">${(periodicity.dominant_period || 0).toFixed(1)} samples</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            // Temperature trends
+            if (temporal.temperature) {
+                const temp = temporal.temperature;
+                const trend = temp.trend || {};
+                const volatility = temp.volatility || {};
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">Temperature Temporal Analysis</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Trend</span>
+                            <span class="trend-indicator trend-${trend.trend || 'stable'}">${trend.trend || 'Unknown'}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Slope</span>
+                            <span class="metric-value">${(trend.slope || 0).toFixed(4)} °C/sample</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Thermal Volatility</span>
+                            <span class="metric-value">${(volatility.current || 0).toFixed(2)} °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Max Volatility</span>
+                            <span class="metric-value">${(volatility.max || 0).toFixed(2)} °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Anomalies</span>
+                            <span class="metric-value">${(temp.anomalies || []).length}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Add advanced models section
+            if (data.advanced) {
+                if (data.advanced.utilization) {
+                    const adv = data.advanced.utilization;
+                    html += `
+                        <div class="detail-card">
+                            <div class="detail-header">Advanced Models - Utilization</div>
+                            <div class="metric-row">
+                                <span class="metric-name">Stability Index</span>
+                                <span class="metric-value">${adv.stability_index}/100</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Shannon Entropy</span>
+                                <span class="metric-value">${adv.entropy.toFixed(3)} bits</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Hurst Exponent</span>
+                                <span class="metric-value">${adv.hurst_exponent.toFixed(3)}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Interpretation</span>
+                                <span class="metric-value">
+                                    ${adv.hurst_exponent > 0.6 ? 'Persistent (trending)' : 
+                                      adv.hurst_exponent < 0.4 ? 'Anti-persistent (mean-reverting)' : 
+                                      'Random walk'}
+                                </span>
+                            </div>
+                            ${adv.change_points && adv.change_points.count > 0 ? `
+                            <div class="metric-row">
+                                <span class="metric-name">Change Points Detected</span>
+                                <span class="metric-value">${adv.change_points.count}</span>
+                            </div>
+                            ` : ''}
+                            ${adv.degradation ? `
+                            <div class="metric-row">
+                                <span class="metric-name">Degradation Rate</span>
+                                <span class="metric-value">${(adv.degradation.rate * 100).toFixed(4)}% per sample</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Degradation Severity</span>
+                                <span class="trend-indicator trend-${adv.degradation.severity === 'critical' ? 'decreasing' : 'stable'}">
+                                    ${adv.degradation.severity.toUpperCase()}
+                                </span>
+                            </div>
+                            ${adv.degradation.projected_failure_steps ? `
+                            <div class="metric-row">
+                                <span class="metric-name">Projected Critical Point</span>
+                                <span class="metric-value">${adv.degradation.projected_failure_steps.toFixed(0)} steps</span>
+                            </div>
+                            ` : ''}
+                            ` : ''}
+                        </div>
+                    `;
+                }
+                
+                if (data.advanced.temperature) {
+                    const adv = data.advanced.temperature;
+                    html += `
+                        <div class="detail-card">
+                            <div class="detail-header">Advanced Models - Temperature</div>
+                            <div class="metric-row">
+                                <span class="metric-name">Thermal Stability Index</span>
+                                <span class="metric-value">${adv.stability_index}/100</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Thermal Entropy</span>
+                                <span class="metric-value">${adv.entropy.toFixed(3)} bits</span>
+                            </div>
+                            ${adv.change_points && adv.change_points.count > 0 ? `
+                            <div class="metric-row">
+                                <span class="metric-name">Thermal Regime Changes</span>
+                                <span class="metric-value">${adv.change_points.count}</span>
+                            </div>
+                            ` : ''}
+                            ${adv.degradation ? `
+                            <div class="metric-row">
+                                <span class="metric-name">Thermal Degradation</span>
+                                <span class="metric-value">${adv.degradation.severity.toUpperCase()}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        async function loadPhysicsAnalysis(node, gpuId) {
+            const response = await fetch(`${API_URL}/advanced-analytics/${node}/${gpuId}`);
+            const data = await response.json();
+            
+            renderPhysicsDetails(data);
+        }
+        
+        function renderPhysicsDetails(data) {
+            const container = document.getElementById('physics-details');
+            const physics = data.physics || {};
+            
+            let html = '';
+            
+            // Thermal dynamics
+            if (physics.thermal) {
+                const thermal = physics.thermal;
+                const stabilityClass = {
+                    'excellent': 'badge-excellent',
+                    'good': 'badge-good',
+                    'moderate': 'badge-moderate',
+                    'poor': 'badge-poor'
+                }[thermal.thermal_stability] || 'badge-moderate';
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">Thermal Dynamics</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Thermal Efficiency</span>
+                            <span class="metric-value">${thermal.thermal_efficiency.toFixed(3)} °C/W</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Heat Dissipation Rate</span>
+                            <span class="metric-value">${thermal.heat_dissipation_rate.toFixed(2)} °C/s</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Power-Temp Correlation</span>
+                            <span class="metric-value">${thermal.thermal_correlation.toFixed(3)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Thermal Stability</span>
+                            <span class="stats-badge ${stabilityClass}">${thermal.thermal_stability}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Avg Temperature</span>
+                            <span class="metric-value">${thermal.avg_temp.toFixed(1)} °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Temp Std Dev</span>
+                            <span class="metric-value">${thermal.temp_std.toFixed(2)} °C</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Power efficiency
+            if (physics.power) {
+                const power = physics.power;
+                const effClass = power.efficiency_score > 70 ? 'badge-excellent' : 
+                                power.efficiency_score > 50 ? 'badge-good' :
+                                power.efficiency_score > 30 ? 'badge-moderate' : 'badge-poor';
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">Power Efficiency</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Efficiency Score</span>
+                            <span class="stats-badge ${effClass}">${power.efficiency_score.toFixed(1)}/100</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Power Efficiency</span>
+                            <span class="metric-value">${power.power_efficiency.toFixed(3)} %/W</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Idle Power</span>
+                            <span class="metric-value">${power.idle_power.toFixed(1)} W</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Peak Power</span>
+                            <span class="metric-value">${power.peak_power.toFixed(1)} W</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Power Range</span>
+                            <span class="metric-value">${(power.peak_power - power.idle_power).toFixed(1)} W</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Workload characteristics
+            if (physics.workload) {
+                const workload = physics.workload;
+                const balanceClass = workload.balance_score > 80 ? 'badge-excellent' :
+                                    workload.balance_score > 60 ? 'badge-good' :
+                                    workload.balance_score > 40 ? 'badge-moderate' : 'badge-poor';
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">Workload Characteristics</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Workload Type</span>
+                            <span class="metric-value">${workload.workload_type.replace('_', ' ')}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Compute Intensity</span>
+                            <span class="metric-value">${workload.compute_intensity.toFixed(1)}%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Memory Intensity</span>
+                            <span class="metric-value">${workload.memory_intensity.toFixed(1)}%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Balance Score</span>
+                            <span class="stats-badge ${balanceClass}">${workload.balance_score.toFixed(1)}/100</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        async function loadCorrelations(node) {
+            const response = await fetch(`${API_URL}/correlation-analysis/${node}`);
+            const data = await response.json();
+            
+            renderCorrelations(data);
+        }
+        
+        function renderCorrelations(data) {
+            const container = document.getElementById('correlation-content');
+            const correlations = data.correlations || {};
+            
+            let html = '<div class="gpu-detail-grid">';
+            
+            Object.keys(correlations).forEach(gpuKey => {
+                const gpuCorr = correlations[gpuKey];
+                
+                html += `
+                    <div class="detail-card">
+                        <div class="detail-header">${gpuKey.replace('_', ' ').toUpperCase()} Correlations</div>
+                        <div class="correlation-matrix">
+                            <table class="correlation-table">
+                                <thead>
+                                    <tr>
+                                        <th>Metric Pair</th>
+                                        <th>Correlation</th>
+                                        <th>Strength</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Object.entries(gpuCorr).map(([pair, value]) => {
+                                        const absVal = Math.abs(value);
+                                        const strength = absVal > 0.7 ? 'Strong' : absVal > 0.4 ? 'Moderate' : 'Weak';
+                                        const cssClass = absVal > 0.7 ? 'corr-high' : absVal > 0.4 ? 'corr-medium' : 'corr-low';
+                                        
+                                        return `
+                                            <tr class="${cssClass}">
+                                                <td>${pair.replace(/_/g, ' → ')}</td>
+                                                <td><strong>${value.toFixed(3)}</strong></td>
+                                                <td>${strength}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        async function loadPredictiveAnalysis(node, gpuId) {
+            const response = await fetch(`${API_URL}/predictive-analysis/${node}/${gpuId}`);
+            const data = await response.json();
+            
+            renderPredictiveDetails(data);
+        }
+        
+        function renderPredictiveDetails(data) {
+            const container = document.getElementById('predictive-details');
+            const predictions = data.predictions || {};
+            
+            let html = '';
+            
+            // Failure risk
+            if (predictions.failure_risk) {
+                const risk = predictions.failure_risk;
+                const riskClass = {
+                    'critical': 'critical',
+                    'high': 'warning',
+                    'moderate': 'warning',
+                    'low': 'good'
+                }[risk.risk_level] || 'neutral';
+                
+                html += `
+                    <div class="insight-card">
+                        <div class="insight-header">Failure Risk Prediction</div>
+                        <div class="insight-value ${riskClass}">${risk.risk_level.toUpperCase()}</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Risk Score</span>
+                            <span class="metric-value">${risk.risk_score}/100</span>
+                        </div>
+                        ${risk.risk_factors.length > 0 ? `
+                        <ul class="warning-list">
+                            ${risk.risk_factors.map(factor => `
+                                <li class="warning-item">${factor}</li>
+                            `).join('')}
+                        </ul>
+                        ` : '<p style="color: #10b981; margin-top: 10px;">No significant risk factors detected</p>'}
+                    </div>
+                `;
+            }
+            
+            // Temperature forecast
+            if (predictions.temperature) {
+                const temp = predictions.temperature;
+                html += `
+                    <div class="insight-card">
+                        <div class="insight-header">Temperature Forecast</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Forecast Confidence</span>
+                            <span class="metric-value">${temp.confidence.toFixed(1)}%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Next 10 Steps</span>
+                            <span class="metric-value">${temp.forecast.length} predictions</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Utilization forecast
+            if (predictions.utilization) {
+                const util = predictions.utilization;
+                html += `
+                    <div class="insight-card">
+                        <div class="insight-header">Utilization Forecast</div>
+                        <div class="metric-row">
+                            <span class="metric-name">Forecast Confidence</span>
+                            <span class="metric-value">${util.confidence.toFixed(1)}%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Next 10 Steps</span>
+                            <span class="metric-value">${util.forecast.length} predictions</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            // Render forecast charts
+            renderForecastCharts(predictions);
+        }
+        
+        function renderForecastCharts(predictions) {
+            const container = document.getElementById('predictive-charts');
+            
+            if (predictions.temperature || predictions.utilization) {
+                container.innerHTML = `
+                    <div class="chart-container">
+                        <div class="chart-title">Metric Forecasts</div>
+                        <canvas id="forecastChart"></canvas>
+                    </div>
+                `;
+                
+                const datasets = [];
+                
+                if (predictions.temperature) {
+                    datasets.push({
+                        label: 'Temperature Forecast (°C)',
+                        data: predictions.temperature.forecast,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    });
+                }
+                
+                if (predictions.utilization) {
+                    datasets.push({
+                        label: 'Utilization Forecast (%)',
+                        data: predictions.utilization.forecast,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    });
+                }
+                
+                new Chart(document.getElementById('forecastChart'), {
+                    type: 'line',
+                    data: {
+                        labels: Array.from({length: 10}, (_, i) => `T+${i+1}`),
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        async function loadClusterAnalysis() {
+            const response = await fetch(`${API_URL}/cluster-analysis`);
+            const data = await response.json();
+            
+            renderClusterAnalysis(data);
+        }
+        
+        function renderClusterAnalysis(data) {
+            const container = document.getElementById('cluster-analysis-content');
+            let html = '<div class="gpu-detail-grid">';
+            
+            // Load imbalance
+            if (data.load_imbalance) {
+                Object.entries(data.load_imbalance).forEach(([node, imbalance]) => {
+                    const balanceClass = imbalance.imbalance_score < 20 ? 'badge-excellent' :
+                                        imbalance.imbalance_score < 40 ? 'badge-good' :
+                                        imbalance.imbalance_score < 60 ? 'badge-moderate' : 'badge-poor';
+                    
+                    html += `
+                        <div class="detail-card">
+                            <div class="detail-header">Load Balance - ${node}</div>
+                            <div class="metric-row">
+                                <span class="metric-name">Imbalance Score</span>
+                                <span class="stats-badge ${balanceClass}">${imbalance.imbalance_score.toFixed(1)}/100</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Coefficient of Variation</span>
+                                <span class="metric-value">${imbalance.coefficient_of_variation.toFixed(3)}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Utilization Range</span>
+                                <span class="metric-value">${imbalance.utilization_range.toFixed(1)}%</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Mean Utilization</span>
+                                <span class="metric-value">${imbalance.mean_utilization.toFixed(1)}%</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-name">Std Deviation</span>
+                                <span class="metric-value">${imbalance.std_utilization.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // GPU Clusters
+            if (data.gpu_clusters) {
+                Object.entries(data.gpu_clusters).forEach(([node, clusters]) => {
+                    if (clusters.clusters) {
+                        html += `
+                            <div class="detail-card">
+                                <div class="detail-header">GPU Behavior Clusters - ${node}</div>
+                                <p style="margin-bottom: 15px;">GPUs grouped by similar behavior patterns:</p>
+                        `;
+                        
+                        Object.entries(clusters.clusters).forEach(([clusterLabel, gpuIds]) => {
+                            html += `
+                                <div class="metric-row">
+                                    <span class="metric-name">Cluster ${clusterLabel}</span>
+                                    <span class="metric-value">GPUs: ${gpuIds.join(', ')}</span>
+                                </div>
+                            `;
+                        });
+                        
+                        html += `</div>`;
+                    }
+                });
+            }
+            
+            // Synchronization
+            if (data.synchronization && data.synchronization.length > 0) {
+                data.synchronization.forEach(sync => {
+                    html += `
+                        <div class="detail-card">
+                            <div class="detail-header">Synchronized GPUs - ${sync.node}</div>
+                            <p style="margin-bottom: 15px;">GPU pairs with correlated behavior:</p>
+                    `;
+                    
+                    sync.synchronized_pairs.forEach(pair => {
+                        html += `
+                            <div class="metric-row">
+                                <span class="metric-name">GPU ${pair.gpu1} ↔ GPU ${pair.gpu2}</span>
+                                <span class="metric-value">Lag: ${pair.lag}, Corr: ${pair.correlation.toFixed(3)}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                });
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        async function init() {
+            try {
+                await loadClusterSummary();
+                document.getElementById('loading').style.display = 'none';
+            } catch (error) {
+                document.getElementById('loading').innerHTML = 
+                    'Error loading analytics: ' + error.message;
+            }
+        }
+        
+        init();
+    </script>
+</body>
+</html>
